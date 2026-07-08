@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+
+/* Enable class-based dark mode (toggle `.dark` on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens — LIGHT theme is the default (:root).
+   Dark theme overrides the same CSS variables under html.dark, so
+   every `var(--color-*)` reference switches automatically. */
+@theme {
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef1f6;
+  --color-border: #dfe4ec;
+  --color-muted: #647089;
+  --color-text: #1a2230;
+  --color-brand: #2563eb;
+  --color-ok: #16a34a;
+  --color-warn: #d97706;
+  --color-danger: #dc2626;
+}
+
+/* Dark palette — higher specificity (html.dark) beats :root. */
+html.dark {
+  --color-bg: #0b0f16;
+  --color-surface: #131926;
+  --color-surface-2: #1b2233;
+  --color-border: #232c3f;
+  --color-muted: #8792a8;
+  --color-text: #e6e9f0;
+  --color-brand: #3b82f6;
+  --color-ok: #22c55e;
+  --color-warn: #f59e0b;
+  --color-danger: #ef4444;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

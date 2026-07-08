@@ -1,0 +1,389 @@
+# Database Management Dashboard — Final Project Plan
+
+---
+
+## Project Name
+**DBWatch** — PostgreSQL Monitoring Dashboard
+
+---
+
+## What It Is
+A deployed web application that connects to your existing PostgreSQL database on AWS EC2 and gives you a real-time monitoring and management interface — like a lightweight pgAdmin built around everything you learned in the internship.
+
+---
+
+## Architecture
+
+```
+Browser (Any Device)
+        │
+        │ HTTPS
+        ▼
+┌─────────────────┐         ┌─────────────────┐
+│  React Frontend │ ──API──▶│ Node.js Backend │
+│  Vercel         │         │ Render          │
+└─────────────────┘         └────────┬────────┘
+                                     │
+                              pg driver (SSL)
+                                     │
+                            ┌────────▼────────┐
+                            │  AWS EC2 Ubuntu  │
+                            │  PostgreSQL 18   │
+                            │  (your instance) │
+                            └─────────────────┘
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Reason |
+|---|---|---|
+| Frontend | React + TypeScript | Component-based, type-safe |
+| Styling | Tailwind CSS + shadcn/ui | Fast, professional UI out of the box |
+| Charts | Recharts | Native React, simple API |
+| Backend | Node.js + Express | Simple, large ecosystem, easy pg integration |
+| DB Driver | node-postgres (pg) | Official PostgreSQL driver for Node |
+| Deployment — Frontend | Vercel | Free, deploys from GitHub in minutes |
+| Deployment — Backend | Render | Free tier, environment variable support |
+| Database | Your AWS EC2 PostgreSQL 18 | Already running — no change needed |
+
+---
+
+## Pre-Build Checklist (Do These First)
+
+| Task | Command / Location |
+|---|---|
+| Assign Elastic IP to EC2 | AWS Console → EC2 → Elastic IPs |
+| Open port 5432 in Security Group | Source: Render's outbound IP |
+| Create a read-only monitoring role | `CREATE ROLE dbwatch WITH LOGIN PASSWORD '...'` |
+| Grant read access to system views | `GRANT pg_monitor TO dbwatch;` |
+| Test connection from outside EC2 | `psql -h <elastic-ip> -U dbwatch -d postgres` |
+
+The read-only role is important. The dashboard should never write to your database except through the SQL editor (which is intentionally manual). Everything monitoring-related uses a restricted role.
+
+---
+
+## Folder Structure
+
+```
+dbwatch/
+│
+├── frontend/                  ← React app
+│   ├── src/
+│   │   ├── components/        ← Reusable UI components
+│   │   ├── pages/             ← One file per dashboard page
+│   │   ├── hooks/             ← Data fetching hooks
+│   │   ├── lib/               ← API client (axios calls to backend)
+│   │   └── types/             ← TypeScript interfaces
+│   ├── .env                   ← VITE_API_URL=https://your-render-url
+│   └── package.json
+│
+├── backend/                   ← Express API
+│   ├── routes/
+│   │   ├── sessions.js        ← pg_stat_activity endpoints
+│   │   ├── database.js        ← pg_stat_database endpoints
+│   │   ├── queries.js         ← pg_stat_statements endpoints
+│   │   ├── explain.js         ← EXPLAIN / EXPLAIN ANALYZE
+│   │   ├── backup.js          ← pg_dump execution
+│   │   ├── logs.js            ← PostgreSQL log reading
+│   │   └── health.js          ← Health score computation
+│   ├── db.js                  ← pg Pool setup
+│   ├── server.js              ← Express entry point
+│   ├── .env                   ← DB credentials (never committed)
+│   └── package.json
+│
+├── .gitignore
+└── README.md
+```
+
+---
+
+## Pages & Features
+
+### Page 1 — Home (Overview)
+
+Single-glance health dashboard.
+
+**Cards:**
+- Active connections (numbackends)
+- Cache hit ratio (blks_hit / blks_hit + blks_read)
+- Total commits today (xact_commit)
+- Total rollbacks (xact_rollback)
+- Database size (pg_database_size())
+- Longest running query duration
+
+**Health Score widget** — a single percentage (0–100) computed from:
+
+| Metric | Weight |
+|---|---|
+| Cache hit ratio ≥ 95% | 25 pts |
+| No blocking sessions | 25 pts |
+| No queries running > 60s | 25 pts |
+| Dead tuple ratio < 5% | 25 pts |
+
+Displayed as a large coloured number: green ≥ 80, amber 50–79, red < 50.
+
+**Auto-refresh:** every 10 seconds via `setInterval`.
+
+---
+
+### Page 2 — Active Sessions
+
+Live view of pg_stat_activity.
+
+**Table columns:** PID · User · Database · State · Duration · Query (truncated)
+
+**Filters:** state (active / idle / idle in transaction) · user · database
+
+**Highlight rules:**
+- Red row: idle in transaction > 30 seconds
+- Amber row: active query > 10 seconds
+- Terminate button: calls `pg_terminate_backend(pid)` — requires confirmation modal
+
+**Refresh:** every 10 seconds.
+
+---
+
+### Page 3 — Database Statistics
+
+pg_stat_database for your monitored database.
+
+**Metric cards:**
+- Transactions committed
+- Transactions rolled back
+- Blocks read from disk
+- Blocks hit from cache
+- Rows returned
+- Rows fetched
+
+**Cache Hit Ratio chart:** line chart showing ratio over time (stored in frontend state for the session, no persistence needed).
+
+---
+
+### Page 4 — Query Performance
+
+pg_stat_statements — the slow query finder.
+
+**Table:** Query text · Calls · Total time · Mean time · Rows · Stddev
+
+**Sort by:** total_exec_time (default) · mean_exec_time · calls
+
+**Search:** filter by query text substring
+
+**Reset button:** calls `pg_stat_statements_reset()` — with confirmation
+
+---
+
+### Page 5 — SQL Editor
+
+Mini query tool with EXPLAIN support.
+
+**Features:**
+- Textarea for SQL input
+- Execute button → shows results in a table
+- EXPLAIN button → shows query plan as formatted text
+- EXPLAIN ANALYZE button → shows plan with actual timing
+- Query history: last 20 queries stored in localStorage
+- Row limit: always appends LIMIT 500 to SELECT queries for safety
+
+**Execution path:** frontend sends SQL to backend → backend runs on a separate limited-privilege connection → returns JSON → frontend renders table
+
+---
+
+### Page 6 — Backup Manager
+
+**Take Backup button** → backend runs:
+```bash
+pg_dump -U postgres -Fc internship_jusdb -f /backups/backup_<timestamp>.dump
+```
+
+**Backup table:** filename · timestamp · size · Download button
+
+**Download:** serves the .dump file from backend as a file download
+
+No restore via UI — intentionally omitted for safety.
+
+---
+
+### Page 7 — Log Viewer
+
+Reads from `/var/log/postgresql/postgresql-*.log` on the EC2 instance.
+
+**Wait** — the backend is not on EC2, so it cannot read EC2 files directly.
+
+**Practical solution:** expose a dedicated lightweight endpoint on EC2 itself (a tiny Express or Python script running locally on EC2 on port 4000, only accessible internally) that serves the last N log lines. The Render backend calls this internal endpoint.
+
+**Alternatively:** skip real-time log reading and instead query `pg_stat_activity` for recently completed queries using `state_change` timestamps. Simpler and still useful.
+
+**Recommended for the project:** skip live log file reading, instead build a "Recent Query Activity" view from pg_stat_activity with a short polling interval. Delivers the same value with zero infrastructure complexity.
+
+---
+
+### Page 8 — Cost & Performance Insights
+
+The differentiating feature. Computed entirely from PostgreSQL views — no AWS API needed.
+
+**Insight cards:**
+
+| Insight | Source | Recommendation Shown |
+|---|---|---|
+| Tables with 0 index scans | pg_stat_user_tables | "Consider adding an index" |
+| Indexes never used | pg_stat_user_indexes (idx_scan = 0) | "Drop this index — saves storage" |
+| Dead tuple ratio > 5% | pg_stat_user_tables | "Run VACUUM on this table" |
+| Cache hit ratio < 90% | pg_stat_database | "Consider increasing shared_buffers" |
+| Queries with mean time > 1s | pg_stat_statements | "Investigate these queries" |
+| Tables > 500MB with Seq Scans | pg_stat_user_tables + pg_relation_size | "High I/O risk — index recommended" |
+
+Each insight is a card with a severity badge (High / Medium / Low), the affected object name, and a one-line recommendation.
+
+---
+
+### Page 9 — Database Explorer
+
+Read-only object browser.
+
+**Tree structure:**
+```
+Databases
+  └── internship_jusdb
+        ├── Tables
+        │     ├── employees (columns, types, size)
+        │     └── employees_perf
+        ├── Indexes
+        ├── Views
+        └── Roles
+```
+
+Clicking a table shows: column names, data types, nullable, row count, table size, index count.
+
+No editing — read-only throughout.
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | What it returns |
+|---|---|---|
+| GET | /api/health | Connection status + server version |
+| GET | /api/overview | All home page metrics in one call |
+| GET | /api/sessions | pg_stat_activity rows |
+| DELETE | /api/sessions/:pid | pg_terminate_backend(pid) |
+| GET | /api/database-stats | pg_stat_database for monitored DB |
+| GET | /api/query-performance | pg_stat_statements top 50 |
+| POST | /api/query-performance/reset | pg_stat_statements_reset() |
+| POST | /api/sql/execute | Run arbitrary SQL, return rows |
+| POST | /api/sql/explain | Run EXPLAIN, return plan text |
+| POST | /api/sql/explain-analyze | Run EXPLAIN ANALYZE, return plan |
+| POST | /api/backup/create | Run pg_dump, return filename |
+| GET | /api/backup/list | List backup files with metadata |
+| GET | /api/backup/download/:filename | Serve backup file download |
+| GET | /api/insights | All cost/performance insight cards |
+| GET | /api/explorer/tables | List tables with sizes |
+| GET | /api/explorer/tables/:name | Table detail — columns, indexes |
+| GET | /api/explorer/indexes | List indexes with usage stats |
+
+---
+
+## Build Order (Strict)
+
+Build in this order. Each stage is a working, demonstrable product on its own.
+
+**Stage 1 — Foundation (Day 1–2)**
+- Backend: Express server, pg pool, .env config, /api/health
+- Frontend: React scaffold, Tailwind, API client setup, connection status banner
+- Vercel + Render deployment wired up to GitHub
+- EC2 Security Group updated, Elastic IP attached
+
+**Stage 2 — Core Monitoring (Day 3–4)**
+- /api/overview → Home page with metric cards + health score
+- /api/sessions → Active Sessions page with table + filters
+- /api/database-stats → Database Statistics page with cache hit chart
+
+**Stage 3 — Query Tools (Day 5–6)**
+- /api/query-performance → Query Performance page
+- /api/sql/* → SQL Editor with EXPLAIN support + query history
+
+**Stage 4 — Backup (Day 7)**
+- /api/backup/* → Backup Manager with take + list + download
+
+**Stage 5 — Insights & Explorer (Day 8–9)**
+- /api/insights → Cost & Performance Insights page
+- /api/explorer/* → Database Explorer tree
+
+**Stage 6 — Polish (Day 10)**
+- Dark mode toggle
+- Loading skeletons on all data tables
+- Error states for lost connection
+- README with architecture diagram and screenshots
+- Final deployment check
+
+---
+
+## What You Are NOT Building
+
+| Feature | Why skipped |
+|---|---|
+| MySQL support | Doubles complexity for no additional learning demonstration |
+| Restore via UI | Safety risk; download is sufficient |
+| User management (CREATE ROLE) | Security risk; read-only viewer is sufficient |
+| SSH / Linux monitoring | Backend is not on EC2 |
+| JWT auth | Overkill for a portfolio project; single env-var password is fine |
+| WebSockets | setInterval polling is sufficient for 10s refresh |
+| AWS CloudWatch integration | All insights computable from PostgreSQL views alone |
+
+---
+
+## Environment Variables
+
+**Backend (.env — never committed)**
+```
+DB_HOST=<your-elastic-ip>
+DB_PORT=5432
+DB_USER=dbwatch
+DB_PASSWORD=<monitoring-role-password>
+DB_NAME=internship_jusdb
+DB_ADMIN_USER=postgres
+DB_ADMIN_PASSWORD=<admin-password>
+BACKUP_DIR=./backups
+DASHBOARD_PASSWORD=<single-admin-password-for-the-web-app>
+PORT=3001
+```
+
+**Frontend (.env)**
+```
+VITE_API_URL=https://your-backend.onrender.com
+```
+
+---
+
+## What This Project Demonstrates
+
+Every feature maps directly to your internship sessions:
+
+| Dashboard Feature | Internship Session |
+|---|---|
+| Active Sessions monitor | Phase 9 — pg_stat_activity |
+| Cache hit ratio | Phase 9 — pg_stat_database |
+| Slow query finder | Phase 9 — pg_stat_statements |
+| EXPLAIN / EXPLAIN ANALYZE | Phase 6 — Query Optimization |
+| Backup Manager | Phase 7 — pg_dump |
+| Cost Insights | Phase 12 — Cloud cost optimization |
+| Health Score | Phase 11 — PostgreSQL Monitoring |
+| Database Explorer | Phase 2 — PostgreSQL Components |
+| Blocking session detection | Phase 9 — pg_blocking_pids() |
+
+---
+
+## Definition of Done
+
+The project is complete when:
+- It is publicly accessible via a Vercel URL
+- It connects live to your AWS EC2 PostgreSQL instance
+- All 9 pages load with real data from your database
+- The README explains the architecture, lists the internship concepts demonstrated, and includes screenshots of each page
+- The GitHub repository is clean with no credentials committed
+
+---
+
+Start with Stage 1. Want me to generate the exact code for the Express backend scaffold and the React frontend setup?

@@ -1,0 +1,33 @@
+# DBWatch — runs the whole dashboard on your EC2 instance.
+#
+#   frontend (nginx, port 80)  ──/api──▶  backend (node, 3001)  ──▶  host PostgreSQL
+#
+# The backend reaches the PostgreSQL running on the EC2 *host* via
+# host.docker.internal (mapped to the host gateway below), so you do
+# NOT need to expose 5432 to the public internet — only port 80.
+
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override .env so the container reaches the host's PostgreSQL.
+      DB_HOST: host.docker.internal
+      CORS_ORIGIN: http://localhost
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      # Persist backups on the host so they survive container restarts.
+      - ./backups:/app/backups
+    expose:
+      - '3001'
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '80:80'
