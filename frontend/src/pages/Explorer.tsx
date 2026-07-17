@@ -7,6 +7,9 @@ import {
   ChevronRight,
   ChevronDown,
   Database,
+  Plus,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
@@ -16,8 +19,22 @@ import type { ExplorerData, TableDetail } from '../types';
 
 type SectionKey = 'tables' | 'views' | 'indexes' | 'roles';
 
+const COLUMN_TYPES = [
+  'integer', 'bigint', 'serial', 'bigserial', 'text', 'varchar', 'boolean',
+  'date', 'timestamp', 'timestamptz', 'numeric', 'real', 'double precision',
+  'uuid', 'json', 'jsonb',
+];
+
+interface NewColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  primaryKey: boolean;
+}
+
 export function Explorer() {
-  const { data, error, loading } = usePolling<ExplorerData>('/explorer', 30_000);
+  const { data, error, loading, reload } = usePolling<ExplorerData>('/explorer', 30_000);
+  const [modal, setModal] = useState<null | 'db' | 'table'>(null);
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({
     tables: true,
     views: false,
@@ -53,7 +70,23 @@ export function Explorer() {
   if (error && !data) return <ErrorStrip message={error} />;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setModal('db')}
+          className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"
+        >
+          <Plus size={15} /> New database
+        </button>
+        <button
+          onClick={() => setModal('table')}
+          className="flex items-center gap-2 rounded-lg bg-[color:var(--color-brand)] px-3 py-2 text-sm font-medium text-[color:var(--color-on-brand)] hover:opacity-90"
+        >
+          <Plus size={15} /> New table
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
       {/* Tree */}
       <Card className="h-fit overflow-hidden">
         <div className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-4 py-3">
@@ -179,6 +212,165 @@ export function Explorer() {
           <TableDetailView detail={detail} />
         ) : null}
       </div>
+      </div>
+
+      {modal === 'db' && (
+        <CreateDatabaseModal onClose={() => setModal(null)} onDone={reload} />
+      )}
+      {modal === 'table' && (
+        <CreateTableModal onClose={() => setModal(null)} onDone={reload} />
+      )}
+    </div>
+  );
+}
+
+// ── Create database modal ──
+function CreateDatabaseModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function submit() {
+    setBusy(true);
+    setErr('');
+    try {
+      await api.post('/explorer/databases', { name });
+      onDone();
+      onClose();
+    } catch (e) {
+      setErr(extractError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ModalShell title="Create database" onClose={onClose}>
+      <label className="mb-1 block text-sm text-muted">Database name</label>
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="e.g. analytics_db"
+        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[color:var(--color-brand)]"
+      />
+      <p className="mt-2 text-xs text-muted">Lowercase letters, digits, and underscores only.</p>
+      {err && <p className="mt-2 text-sm text-[color:var(--color-danger)]">{err}</p>}
+      <ModalActions busy={busy} disabled={!name} onCancel={onClose} onConfirm={submit} confirmLabel="Create" />
+    </ModalShell>
+  );
+}
+
+// ── Create table modal ──
+function CreateTableModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [cols, setCols] = useState<NewColumn[]>([
+    { name: 'id', type: 'serial', nullable: false, primaryKey: true },
+  ]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const update = (i: number, patch: Partial<NewColumn>) =>
+    setCols((c) => c.map((col, idx) => (idx === i ? { ...col, ...patch } : col)));
+  const addCol = () => setCols((c) => [...c, { name: '', type: 'text', nullable: true, primaryKey: false }]);
+  const removeCol = (i: number) => setCols((c) => c.filter((_, idx) => idx !== i));
+
+  async function submit() {
+    setBusy(true);
+    setErr('');
+    try {
+      await api.post('/explorer/tables', { name, columns: cols });
+      onDone();
+      onClose();
+    } catch (e) {
+      setErr(extractError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Create table" onClose={onClose} wide>
+      <label className="mb-1 block text-sm text-muted">Table name</label>
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="e.g. customers"
+        className="mb-4 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[color:var(--color-brand)]"
+      />
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-medium">Columns</span>
+        <button onClick={addCol} className="flex items-center gap-1 text-xs text-[color:var(--color-brand)] hover:underline">
+          <Plus size={13} /> Add column
+        </button>
+      </div>
+      <div className="space-y-2">
+        {cols.map((col, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              value={col.name}
+              onChange={(e) => update(i, { name: e.target.value })}
+              placeholder="column"
+              className="w-32 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+            />
+            <select
+              value={col.type}
+              onChange={(e) => update(i, { type: e.target.value })}
+              className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm"
+            >
+              {COLUMN_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1 text-xs text-muted">
+              <input type="checkbox" checked={!col.nullable} onChange={(e) => update(i, { nullable: !e.target.checked })} />
+              NOT NULL
+            </label>
+            <label className="flex items-center gap-1 text-xs text-muted">
+              <input type="checkbox" checked={col.primaryKey} onChange={(e) => update(i, { primaryKey: e.target.checked })} />
+              PK
+            </label>
+            {cols.length > 1 && (
+              <button onClick={() => removeCol(i)} className="ml-auto text-muted hover:text-[color:var(--color-danger)]">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {err && <p className="mt-3 text-sm text-[color:var(--color-danger)]">{err}</p>}
+      <ModalActions busy={busy} disabled={!name || cols.some((c) => !c.name)} onCancel={onClose} onConfirm={submit} confirmLabel="Create table" />
+    </ModalShell>
+  );
+}
+
+function ModalShell({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className={`w-full ${wide ? 'max-w-lg' : 'max-w-sm'} rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-2xl`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 text-base font-semibold">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ModalActions({ busy, disabled, onCancel, onConfirm, confirmLabel }: { busy: boolean; disabled: boolean; onCancel: () => void; onConfirm: () => void; confirmLabel: string }) {
+  return (
+    <div className="mt-6 flex justify-end gap-2">
+      <button onClick={onCancel} disabled={busy} className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-surface-2)] disabled:opacity-50">
+        Cancel
+      </button>
+      <button
+        onClick={onConfirm}
+        disabled={busy || disabled}
+        className="flex items-center gap-2 rounded-lg bg-[color:var(--color-brand)] px-4 py-2 text-sm font-medium text-[color:var(--color-on-brand)] hover:opacity-90 disabled:opacity-50"
+      >
+        {busy && <Loader2 size={15} className="animate-spin" />}
+        {confirmLabel}
+      </button>
     </div>
   );
 }

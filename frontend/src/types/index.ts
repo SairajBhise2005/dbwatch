@@ -50,9 +50,57 @@ export interface Session {
   query: string;
 }
 
+export interface SessionsSummary {
+  totalConnections: number;
+  distinctUsers: number;
+  active: number;
+  idle: number;
+  idleInTransaction: number;
+  byState: Record<string, number>;
+}
+
 export interface SessionsResponse {
   sessions: Session[];
   count: number;
+  summary: SessionsSummary;
+}
+
+export type DiagStatus = 'ok' | 'warn' | 'fail';
+
+export interface DiagnosticCheck {
+  name: string;
+  status: DiagStatus;
+  detail: string;
+}
+
+export interface Diagnostics {
+  overall: DiagStatus;
+  summary: { ok: number; warn: number; fail: number };
+  checks: DiagnosticCheck[];
+}
+
+export interface CostScenario {
+  direction: 'downscale' | 'upscale';
+  instanceClass: string;
+  monthlyCost: number;
+  deltaMonthly: number | null;
+}
+
+export interface CostOverview {
+  available: boolean;
+  message?: string;
+  currency?: string;
+  pricingNote?: string;
+  instance?: { class: string; storageGb: number; hourly: number | null };
+  breakdown?: { instanceCost: number | null; storageCost: number; totalMonthly: number | null };
+  scenarios?: CostScenario[];
+  recommendation?: {
+    action: 'right-sized' | 'downscale' | 'upscale';
+    rationale: string;
+    targetClass: string;
+    monthlyDelta: number | null;
+  };
+  utilization?: { avgCpu: number | null; peakCpu: number | null };
 }
 
 // ── AWS / RDS + CloudWatch ──

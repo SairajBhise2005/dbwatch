@@ -7,9 +7,18 @@
 // injection-safe.
 
 import { Router } from 'express';
-import { monitorPool } from '../db.js';
+import { monitorPool, adminPool } from '../db.js';
 
 const router = Router();
+
+// Strict identifier + type allowlists for the create-DDL endpoints.
+// Because names are validated against these, quoting them is injection-safe.
+const IDENT = /^[a-z_][a-z0-9_]{0,62}$/;
+const ALLOWED_TYPES = new Set([
+  'smallint', 'integer', 'bigint', 'serial', 'bigserial',
+  'text', 'varchar', 'boolean', 'date', 'timestamp', 'timestamptz',
+  'numeric', 'real', 'double precision', 'uuid', 'json', 'jsonb',
+]);
 
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 
@@ -137,6 +146,54 @@ router.get('/tables/:name', async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+});
+
+// POST /api/explorer/databases  — create a new database
+router.post('/databases', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!IDENT.test(name)) {
+    return res.status(400).json({ error: 'Invalid database name (use lowercase letters, digits, underscore).' });
+  }
+  try {
+    // CREATE DATABASE cannot run inside a transaction, so run it directly.
+    await adminPool.query(`CREATE DATABASE "${name}"`);
+    res.json({ ok: true, created: name });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/explorer/tables — create a table from a column spec
+router.post('/tables', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const schema = String(req.body?.schema || 'public').trim();
+  const columns = Array.isArray(req.body?.columns) ? req.body.columns : [];
+
+  if (!IDENT.test(name)) return res.status(400).json({ error: 'Invalid table name.' });
+  if (!IDENT.test(schema)) return res.status(400).json({ error: 'Invalid schema name.' });
+  if (columns.length === 0) return res.status(400).json({ error: 'At least one column is required.' });
+
+  const defs = [];
+  const pkCols = [];
+  for (const col of columns) {
+    const cname = String(col?.name || '').trim();
+    const ctype = String(col?.type || '').trim().toLowerCase();
+    if (!IDENT.test(cname)) return res.status(400).json({ error: `Invalid column name: ${cname}` });
+    if (!ALLOWED_TYPES.has(ctype)) return res.status(400).json({ error: `Unsupported type: ${ctype}` });
+    let def = `"${cname}" ${ctype}`;
+    if (col?.nullable === false) def += ' NOT NULL';
+    defs.push(def);
+    if (col?.primaryKey) pkCols.push(`"${cname}"`);
+  }
+  if (pkCols.length) defs.push(`PRIMARY KEY (${pkCols.join(', ')})`);
+
+  const ddl = `CREATE TABLE "${schema}"."${name}" (\n  ${defs.join(',\n  ')}\n)`;
+  try {
+    await adminPool.query(ddl);
+    res.json({ ok: true, created: `${schema}.${name}`, ddl });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

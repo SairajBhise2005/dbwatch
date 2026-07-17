@@ -12,6 +12,7 @@ import { Insights } from './pages/Insights';
 import { Explorer } from './pages/Explorer';
 import { Activity } from './pages/Activity';
 import { Cloud } from './pages/Cloud';
+import { Cost } from './pages/Cost';
 import { Placeholder } from './pages/Placeholder';
 import { getStoredPassword, logout } from './lib/api';
 
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/insights" element={<Insights />} />
         <Route path="/explorer" element={<Explorer />} />
         <Route path="/cloud" element={<Cloud />} />
+        <Route path="/cost" element={<Cost />} />
         <Route path="*" element={<Placeholder title="Not found" stage="—" />} />
       </Routes>
     </Layout>

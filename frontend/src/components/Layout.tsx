@@ -10,6 +10,7 @@ import {
   Lightbulb,
   FolderTree,
   Cloud,
+  DollarSign,
   LogOut,
   Eye,
   Sun,
@@ -25,15 +26,16 @@ import { useTheme } from '../hooks/useTheme';
 // `ready: false` pages render a "coming in a later stage" placeholder.
 export const NAV_ITEMS = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, ready: true },
-  { to: '/sessions', label: 'Active Sessions', icon: Activity, ready: true },
+  { to: '/sessions', label: 'Live Telemetry', icon: Activity, ready: true },
   { to: '/database-stats', label: 'Database Stats', icon: Database, ready: true },
   { to: '/query-performance', label: 'Query Performance', icon: Gauge, ready: true },
   { to: '/sql-editor', label: 'SQL Editor', icon: Terminal, ready: true },
   { to: '/backups', label: 'Backup Manager', icon: Archive, ready: true },
   { to: '/activity', label: 'Recent Activity', icon: ScrollText, ready: true },
-  { to: '/insights', label: 'Cost & Insights', icon: Lightbulb, ready: true },
-  { to: '/explorer', label: 'DB Explorer', icon: FolderTree, ready: true },
-  { to: '/cloud', label: 'Cloud (RDS)', icon: Cloud, ready: true },
+  { to: '/insights', label: 'Tuning Insights', icon: Lightbulb, ready: true },
+  { to: '/explorer', label: 'Database Viewer', icon: FolderTree, ready: true },
+  { to: '/cloud', label: 'Infra Vitals', icon: Cloud, ready: true },
+  { to: '/cost', label: 'Cost Realization', icon: DollarSign, ready: true },
 ] as const;
 
 interface Props {
@@ -54,7 +56,7 @@ export function Layout({ children, onLogout }: Props) {
       <aside className="flex w-60 shrink-0 flex-col border-r border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
         <div className="flex items-center gap-2 px-5 py-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[color:var(--color-brand)]">
-            <Eye size={18} className="text-white" />
+            <Eye size={18} className="text-[color:var(--color-on-brand)]" />
           </div>
           <div>
             <div className="text-sm font-semibold leading-tight">DBWatch</div>

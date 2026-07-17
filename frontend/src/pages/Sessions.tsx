@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
-import { XCircle, RefreshCw } from 'lucide-react';
+import { XCircle, RefreshCw, CheckCircle2, AlertTriangle, Users, Network, Activity } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
-import { Card, Badge, Skeleton, ErrorStrip } from '../components/ui';
+import { Card, Badge, StatCard, Skeleton, ErrorStrip } from '../components/ui';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { formatDuration, extractError } from '../lib/format';
-import type { Session, SessionsResponse } from '../types';
+import type { Session, SessionsResponse, Diagnostics, DiagStatus } from '../types';
 
 export function Sessions() {
   const { data, error, loading, reload } = usePolling<SessionsResponse>(
     '/sessions',
     10_000
   );
+  const { data: diag } = usePolling<Diagnostics>('/diagnostics', 15_000);
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [target, setTarget] = useState<Session | null>(null);
@@ -67,9 +68,50 @@ export function Sessions() {
     return '';
   }
 
+  const summary = data?.summary;
+
   return (
     <div className="space-y-4">
       {error && !data && <ErrorStrip message={error} />}
+
+      {/* Connection metrics */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard icon={<Network size={18} />} label="Total connections" value={summary ? String(summary.totalConnections) : '…'} />
+        <StatCard icon={<Users size={18} />} label="Distinct users" value={summary ? String(summary.distinctUsers) : '…'} />
+        <StatCard icon={<Activity size={18} />} label="Active" value={summary ? String(summary.active) : '…'} tone={summary && summary.active > 0 ? 'ok' : undefined} />
+        <StatCard
+          icon={<AlertTriangle size={18} />}
+          label="Idle in transaction"
+          value={summary ? String(summary.idleInTransaction) : '…'}
+          tone={summary && summary.idleInTransaction > 0 ? 'warn' : undefined}
+        />
+      </div>
+
+      {/* Automated health diagnostics */}
+      {diag && (
+        <Card className="p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Automated health diagnostics</h2>
+            <Badge tone={diag.overall === 'ok' ? 'ok' : diag.overall === 'warn' ? 'warn' : 'danger'}>
+              {diag.overall === 'ok' ? 'Healthy' : diag.overall === 'warn' ? 'Attention' : 'Critical'}
+            </Badge>
+            <span className="ml-auto text-xs text-muted">
+              {diag.summary.ok} ok · {diag.summary.warn} warn · {diag.summary.fail} fail
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2 xl:grid-cols-3">
+            {diag.checks.map((c) => (
+              <div key={c.name} className="flex items-start gap-2 text-sm">
+                <DiagIcon status={c.status} />
+                <div>
+                  <div className="font-medium">{c.name}</div>
+                  <div className="text-xs text-muted">{c.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <select
@@ -207,6 +249,12 @@ function StateBadge({ state }: { state: string | null }) {
           ? 'warn'
           : 'neutral';
   return <Badge tone={tone}>{state}</Badge>;
+}
+
+function DiagIcon({ status }: { status: DiagStatus }) {
+  if (status === 'ok') return <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[color:var(--color-ok)]" />;
+  if (status === 'warn') return <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[color:var(--color-warn)]" />;
+  return <XCircle size={16} className="mt-0.5 shrink-0 text-[color:var(--color-danger)]" />;
 }
 
 function Th({ children }: { children: React.ReactNode }) {

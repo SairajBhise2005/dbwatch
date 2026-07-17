@@ -149,7 +149,7 @@ export function Cloud() {
               onClick={() => setMinutes(r.minutes)}
               className={`rounded-md px-3 py-1 text-xs ${
                 minutes === r.minutes
-                  ? 'bg-[color:var(--color-brand)] text-white'
+                  ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)]'
                   : 'border border-[color:var(--color-border)] text-muted hover:bg-[color:var(--color-surface-2)]'
               }`}
             >
@@ -200,6 +200,32 @@ export function Cloud() {
               { key: 'a', name: 'Read', color: 'var(--color-brand)' },
               { key: 'b', name: 'Write', color: 'var(--color-danger)' },
             ]}
+          />
+          <Chart
+            title="Disk throughput (MB/s)"
+            data={dual(m.readThroughput, m.writeThroughput, (v) => v / 1024 ** 2)}
+            lines={[
+              { key: 'a', name: 'Read', color: 'var(--color-brand)' },
+              { key: 'b', name: 'Write', color: 'var(--color-danger)' },
+            ]}
+          />
+          <Chart
+            title="Network (MB/s)"
+            data={dual(m.netRx, m.netTx, (v) => v / 1024 ** 2)}
+            lines={[
+              { key: 'a', name: 'In', color: 'var(--color-ok)' },
+              { key: 'b', name: 'Out', color: '#a855f7' },
+            ]}
+          />
+          <Chart
+            title="Disk queue depth"
+            data={single(m.diskQueue)}
+            lines={[{ key: 'v', name: 'Queue depth', color: 'var(--color-warn)' }]}
+          />
+          <Chart
+            title="CPU credit balance (t-class)"
+            data={single(m.cpuCredits)}
+            lines={[{ key: 'v', name: 'Credits', color: 'var(--color-brand)' }]}
           />
         </div>
       )}

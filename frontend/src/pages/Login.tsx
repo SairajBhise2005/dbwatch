@@ -34,7 +34,7 @@ export function Login({ onSuccess }: Props) {
       >
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--color-brand)]">
-            <Eye size={20} className="text-white" />
+            <Eye size={20} className="text-[color:var(--color-on-brand)]" />
           </div>
           <div>
             <div className="text-lg font-semibold">DBWatch</div>
@@ -61,7 +61,7 @@ export function Login({ onSuccess }: Props) {
         <button
           type="submit"
           disabled={busy || !password}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[color:var(--color-brand)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[color:var(--color-brand)] px-4 py-2 text-sm font-medium text-[color:var(--color-on-brand)] transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
           Unlock

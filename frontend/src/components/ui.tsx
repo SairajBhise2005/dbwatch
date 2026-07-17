@@ -87,6 +87,106 @@ export function Skeleton({ className = '' }: { className?: string }) {
   );
 }
 
+// ── Radial gauge (SVG donut) ──
+export function RingGauge({
+  value,
+  max = 100,
+  size = 132,
+  thickness = 11,
+  color = 'var(--color-brand)',
+  centerLabel,
+  sublabel,
+}: {
+  value: number;
+  max?: number;
+  size?: number;
+  thickness?: number;
+  color?: string;
+  centerLabel: string;
+  sublabel?: string;
+}) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const r = (size - thickness) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - pct / 100);
+  const cx = size / 2;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--color-surface-2)" strokeWidth={thickness} />
+      <circle
+        cx={cx}
+        cy={cx}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={thickness}
+        strokeLinecap="round"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        transform={`rotate(-90 ${cx} ${cx})`}
+        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+      />
+      <text x="50%" y="47%" textAnchor="middle" dominantBaseline="middle" fill="var(--color-text)" fontSize={size * 0.23} fontWeight={700}>
+        {centerLabel}
+      </text>
+      {sublabel && (
+        <text x="50%" y="64%" textAnchor="middle" fill="var(--color-muted)" fontSize={size * 0.1}>
+          {sublabel}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+// ── Horizontal progress bar ──
+export function ProgressBar({
+  value,
+  max = 100,
+  tone = 'ok',
+}: {
+  value: number;
+  max?: number;
+  tone?: 'ok' | 'warn' | 'danger';
+}) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const color =
+    tone === 'danger'
+      ? 'var(--color-danger)'
+      : tone === 'warn'
+        ? 'var(--color-warn)'
+        : 'var(--color-ok)';
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--color-surface-2)]">
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: 'width 0.5s ease' }} />
+    </div>
+  );
+}
+
+// ── Sparkline (tiny inline trend) ──
+export function Sparkline({
+  data,
+  color = 'var(--color-brand)',
+  width = 96,
+  height = 30,
+}: {
+  data: number[];
+  color?: string;
+  width?: number;
+  height?: number;
+}) {
+  if (!data.length) return null;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const step = width / (data.length - 1 || 1);
+  const pts = data.map((d, i) => `${(i * step).toFixed(1)},${(height - ((d - min) / range) * height).toFixed(1)}`).join(' ');
+  return (
+    <svg width={width} height={height} className="overflow-visible">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ── Inline error strip ──
 export function ErrorStrip({ message }: { message: string }) {
   return (

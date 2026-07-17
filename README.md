@@ -11,7 +11,18 @@ architecture, performance monitoring, query optimization, backups, and security.
 > with the self-managed setup.
 
 **Docs:** [Full documentation](docs/DOCUMENTATION.md) ·
-[AWS RDS + CloudWatch integration](docs/AWS_RDS_INTEGRATION.md)
+[AWS Console setup](docs/AWS_CONSOLE_SETUP.md) ·
+[AWS RDS + CloudWatch integration](docs/AWS_RDS_INTEGRATION.md) ·
+[Private RDS architecture](docs/PRIVATE_RDS_ARCHITECTURE.md)
+
+### v2 highlights (AWS upgrade)
+
+- **New palette** — One-Dark theme (mint accent), more **graphs/gauges** over raw numbers.
+- **Live Telemetry** — distinct-user + connection-state metrics and an **automated health-diagnostics** panel.
+- **Infra Vitals** — expanded CloudWatch coverage (CPU, memory, storage, IOPS, latency, throughput, network, disk queue, CPU credits).
+- **Cost Realization** — pricing-based monthly bill estimate + concrete up/down-scale recommendations with $ impact.
+- **Database Viewer** — interactive **create database / create table** (injection-safe DDL).
+- **Private RDS** — research + same-VPC-direct architecture (bastion / SSH tunnel / SSM for admin access).
 
 ---
 

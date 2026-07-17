@@ -85,7 +85,7 @@ export function Backups() {
         <button
           onClick={createBackup}
           disabled={busyCreate}
-          className="flex items-center gap-2 rounded-lg bg-[color:var(--color-brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg bg-[color:var(--color-brand)] px-4 py-2 text-sm font-medium text-[color:var(--color-on-brand)] hover:opacity-90 disabled:opacity-50"
         >
           {busyCreate ? (
             <Loader2 size={16} className="animate-spin" />

@@ -7,30 +7,34 @@
    Dark theme overrides the same CSS variables under html.dark, so
    every `var(--color-*)` reference switches automatically. */
 @theme {
+  /* Light theme (default :root) */
   --color-bg: #f5f7fa;
   --color-surface: #ffffff;
   --color-surface-2: #eef1f6;
   --color-border: #dfe4ec;
   --color-muted: #647089;
   --color-text: #1a2230;
-  --color-brand: #2563eb;
-  --color-ok: #16a34a;
-  --color-warn: #d97706;
-  --color-danger: #dc2626;
+  --color-brand: #159a5f;
+  --color-on-brand: #ffffff;
+  --color-ok: #159a5f;
+  --color-warn: #b7791f;
+  --color-danger: #c0392b;
 }
 
-/* Dark palette — higher specificity (html.dark) beats :root. */
+/* Dark palette — the requested One-Dark scheme.
+   #1E222A bg · #282C34 containers · #4EDB87 mint accent · #ABB2BF text */
 html.dark {
-  --color-bg: #0b0f16;
-  --color-surface: #131926;
-  --color-surface-2: #1b2233;
-  --color-border: #232c3f;
-  --color-muted: #8792a8;
-  --color-text: #e6e9f0;
-  --color-brand: #3b82f6;
-  --color-ok: #22c55e;
-  --color-warn: #f59e0b;
-  --color-danger: #ef4444;
+  --color-bg: #1e222a;
+  --color-surface: #282c34;
+  --color-surface-2: #31363f;
+  --color-border: #3a404b;
+  --color-muted: #7f8896;
+  --color-text: #abb2bf;
+  --color-brand: #4edb87; /* soft mint accent */
+  --color-on-brand: #10231a; /* dark text on mint for contrast */
+  --color-ok: #4edb87;
+  --color-warn: #e5c07b;
+  --color-danger: #e06c75;
 }
 
 html,

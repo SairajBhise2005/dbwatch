@@ -229,7 +229,7 @@ function ActionButton({
       disabled={disabled}
       className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-50 ${
         primary
-          ? 'bg-[color:var(--color-brand)] text-white hover:opacity-90'
+          ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)] hover:opacity-90'
           : 'border border-[color:var(--color-border)] hover:bg-[color:var(--color-surface-2)]'
       }`}
     >

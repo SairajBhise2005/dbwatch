@@ -44,6 +44,13 @@ export const METRICS = [
   { key: 'writeIops', name: 'WriteIOPS', stat: 'Average', unit: 'Count/Second', label: 'Write IOPS' },
   { key: 'readLatency', name: 'ReadLatency', stat: 'Average', unit: 'Seconds', label: 'Read latency' },
   { key: 'writeLatency', name: 'WriteLatency', stat: 'Average', unit: 'Seconds', label: 'Write latency' },
+  { key: 'readThroughput', name: 'ReadThroughput', stat: 'Average', unit: 'Bytes/Second', label: 'Read throughput' },
+  { key: 'writeThroughput', name: 'WriteThroughput', stat: 'Average', unit: 'Bytes/Second', label: 'Write throughput' },
+  { key: 'netRx', name: 'NetworkReceiveThroughput', stat: 'Average', unit: 'Bytes/Second', label: 'Network in' },
+  { key: 'netTx', name: 'NetworkTransmitThroughput', stat: 'Average', unit: 'Bytes/Second', label: 'Network out' },
+  { key: 'diskQueue', name: 'DiskQueueDepth', stat: 'Average', unit: 'Count', label: 'Disk queue depth' },
+  { key: 'swap', name: 'SwapUsage', stat: 'Average', unit: 'Bytes', label: 'Swap usage' },
+  { key: 'cpuCredits', name: 'CPUCreditBalance', stat: 'Average', unit: 'Count', label: 'CPU credit balance' },
 ];
 
 /**

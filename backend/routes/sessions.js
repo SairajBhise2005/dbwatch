@@ -42,7 +42,29 @@ router.get('/', async (_req, res, next) => {
       query: (r.query || '').trim(),
     }));
 
-    res.json({ sessions, count: sessions.length });
+    // Connection summary: distinct users from the active process list,
+    // plus total threads and a per-state breakdown.
+    const distinctUsers = new Set(
+      sessions.map((s) => s.username).filter(Boolean)
+    ).size;
+    const byState = sessions.reduce((acc, s) => {
+      const key = s.state || 'unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      sessions,
+      count: sessions.length,
+      summary: {
+        totalConnections: sessions.length,
+        distinctUsers,
+        active: byState['active'] || 0,
+        idle: byState['idle'] || 0,
+        idleInTransaction: byState['idle in transaction'] || 0,
+        byState,
+      },
+    });
   } catch (err) {
     next(err);
   }
