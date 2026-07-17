@@ -10,7 +10,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] ${className}`}
+      className={`rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] transition-colors duration-200 hover:border-[color:var(--color-brand)]/40 ${className}`}
     >
       {children}
     </div>
@@ -45,7 +45,7 @@ export function StatCard({
         {icon}
         <span className="text-sm">{label}</span>
       </div>
-      <div className={`mt-2 truncate text-2xl font-semibold ${toneClass}`}>
+      <div className={`mt-2 truncate text-2xl font-bold tracking-tight ${toneClass}`}>
         {value}
       </div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
@@ -71,7 +71,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${map[tone]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${map[tone]}`}
     >
       {children}
     </span>
@@ -126,11 +126,11 @@ export function RingGauge({
         transform={`rotate(-90 ${cx} ${cx})`}
         style={{ transition: 'stroke-dashoffset 0.6s ease' }}
       />
-      <text x="50%" y="47%" textAnchor="middle" dominantBaseline="middle" fill="var(--color-text)" fontSize={size * 0.23} fontWeight={700}>
+      <text x="50%" y="47%" textAnchor="middle" dominantBaseline="middle" fill="var(--color-text)" fontFamily="var(--font-mono)" fontSize={size * 0.22} fontWeight={600} letterSpacing="-0.02em">
         {centerLabel}
       </text>
       {sublabel && (
-        <text x="50%" y="64%" textAnchor="middle" fill="var(--color-muted)" fontSize={size * 0.1}>
+        <text x="50%" y="64%" textAnchor="middle" fill="var(--color-muted)" fontFamily="var(--font-mono)" fontSize={size * 0.1} letterSpacing="0.05em">
           {sublabel}
         </text>
       )}

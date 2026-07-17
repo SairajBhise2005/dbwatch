@@ -1,40 +1,53 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 /* Enable class-based dark mode (toggle `.dark` on <html>). */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Design tokens — LIGHT theme is the default (:root).
-   Dark theme overrides the same CSS variables under html.dark, so
-   every `var(--color-*)` reference switches automatically. */
 @theme {
+  /* Typefaces — IBM Plex: built for technical/data products.
+     Sans for UI, Mono for every telemetry readout. */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
   /* Light theme (default :root) */
-  --color-bg: #f5f7fa;
+  --color-bg: #f3f5f9;
   --color-surface: #ffffff;
   --color-surface-2: #eef1f6;
-  --color-border: #dfe4ec;
-  --color-muted: #647089;
-  --color-text: #1a2230;
-  --color-brand: #159a5f;
+  --color-sidebar: #ffffff;
+  --color-border: #e2e6ee;
+  --color-muted: #6a7385;
+  --color-text: #171c28;
+  --color-brand: #6d5ae0;
   --color-on-brand: #ffffff;
-  --color-ok: #159a5f;
+  --color-ok: #17915b;
   --color-warn: #b7791f;
-  --color-danger: #c0392b;
+  --color-danger: #d23f43;
+
+  /* Category / chart series — violet-led multi-color set. */
+  --chart-1: #7c6cf0; /* violet */
+  --chart-2: #4a9eff; /* blue   */
+  --chart-3: #2dd4bf; /* teal   */
+  --chart-4: #f5a623; /* amber  */
+  --chart-5: #f56565; /* red    */
+  --chart-6: #34d399; /* green  */
 }
 
-/* Dark palette — the requested One-Dark scheme.
-   #1E222A bg · #282C34 containers · #4EDB87 mint accent · #ABB2BF text */
+/* Dark palette — violet-accented navy console (matches the reference).
+   Sidebar is darker than the content; cards are a lifted navy. */
 html.dark {
-  --color-bg: #1e222a;
-  --color-surface: #282c34;
-  --color-surface-2: #31363f;
-  --color-border: #3a404b;
-  --color-muted: #7f8896;
-  --color-text: #abb2bf;
-  --color-brand: #4edb87; /* soft mint accent */
-  --color-on-brand: #10231a; /* dark text on mint for contrast */
-  --color-ok: #4edb87;
-  --color-warn: #e5c07b;
-  --color-danger: #e06c75;
+  --color-bg: #151a24;
+  --color-surface: #1e2430;
+  --color-surface-2: #272e3d;
+  --color-sidebar: #0f141d;
+  --color-border: #2b3342;
+  --color-muted: #8a93a5;
+  --color-text: #e6e9f0;
+  --color-brand: #7c6cf0; /* violet accent */
+  --color-on-brand: #ffffff;
+  --color-ok: #34d399;
+  --color-warn: #f5a623;
+  --color-danger: #f56565;
 }
 
 html,
@@ -47,8 +60,74 @@ body {
   margin: 0;
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Eyebrow / section label — the structural voice of the console. */
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+/* Text selection uses the mint accent. */
+::selection {
+  background: color-mix(in srgb, var(--color-brand) 30%, transparent);
+}
+
+/* Keyboard focus ring — visible, on-brand, everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Quiet, themed scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 8px;
+  border: 2px solid var(--color-bg);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+@keyframes dbw-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.82); }
+}
+.pulse-dot {
+  animation: dbw-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dbw-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: dbw-rise 0.5s ease both;
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
