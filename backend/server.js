@@ -19,6 +19,7 @@ import backupRouter from './routes/backup.js';
 import insightsRouter from './routes/insights.js';
 import explorerRouter from './routes/explorer.js';
 import activityRouter from './routes/activity.js';
+import cloudRouter from './routes/cloud.js';
 import { requireAuth, loginHandler } from './middleware/auth.js';
 
 dotenv.config();
@@ -61,6 +62,9 @@ app.use('/api/explorer', explorerRouter);
 
 // Stage 6 — Recent Activity
 app.use('/api/activity', activityRouter);
+
+// AWS — RDS + CloudWatch monitoring
+app.use('/api/cloud', cloudRouter);
 
 // --- 404 + error handling ---
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

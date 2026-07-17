@@ -19,3 +19,6 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+
+# TS build cache
+*.tsbuildinfo

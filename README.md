@@ -5,8 +5,13 @@ inspired by pgAdmin and Grafana, built to monitor a PostgreSQL instance running
 on AWS EC2. Final internship project tying together Linux, AWS, PostgreSQL
 architecture, performance monitoring, query optimization, backups, and security.
 
-> **Status:** Stage 1 (Foundation) complete. Built stage by stage — see
-> [Build Progress](#build-progress).
+> **Status:** Complete and deployed. Now integrated with **Amazon RDS** +
+> **CloudWatch** — see [AWS RDS Integration](docs/AWS_RDS_INTEGRATION.md) for the
+> managed-database migration, the new **Cloud (RDS)** page, and a comparison
+> with the self-managed setup.
+
+**Docs:** [Full documentation](docs/DOCUMENTATION.md) ·
+[AWS RDS + CloudWatch integration](docs/AWS_RDS_INTEGRATION.md)
 
 ---
 

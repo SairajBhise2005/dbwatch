@@ -9,6 +9,7 @@ import {
   ScrollText,
   Lightbulb,
   FolderTree,
+  Cloud,
   LogOut,
   Eye,
   Sun,
@@ -32,6 +33,7 @@ export const NAV_ITEMS = [
   { to: '/activity', label: 'Recent Activity', icon: ScrollText, ready: true },
   { to: '/insights', label: 'Cost & Insights', icon: Lightbulb, ready: true },
   { to: '/explorer', label: 'DB Explorer', icon: FolderTree, ready: true },
+  { to: '/cloud', label: 'Cloud (RDS)', icon: Cloud, ready: true },
 ] as const;
 
 interface Props {

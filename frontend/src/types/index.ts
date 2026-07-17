@@ -55,6 +55,73 @@ export interface SessionsResponse {
   count: number;
 }
 
+// ── AWS / RDS + CloudWatch ──
+export interface CloudInstance {
+  available: boolean;
+  instanceId?: string;
+  instanceClass?: string;
+  engine?: string;
+  engineVersion?: string;
+  status?: string;
+  allocatedStorageGb?: number;
+  maxAllocatedStorageGb?: number | null;
+  storageType?: string;
+  multiAZ?: boolean;
+  publiclyAccessible?: boolean;
+  backupRetentionDays?: number;
+  performanceInsights?: boolean;
+  availabilityZone?: string;
+  reason?: string;
+}
+
+export interface CloudLatest {
+  cpu: number | null;
+  connections: number | null;
+  freeMemoryBytes: number | null;
+  freeStorageBytes: number | null;
+  readIops: number | null;
+  writeIops: number | null;
+  readLatencyMs: number | null;
+  writeLatencyMs: number | null;
+}
+
+export interface CloudRecommendation {
+  id: number;
+  severity: 'High' | 'Medium' | 'Low';
+  category: string;
+  detail: string;
+  recommendation: string;
+}
+
+export interface CloudOverview {
+  available: boolean;
+  message?: string;
+  config?: { region: string; instanceId: string };
+  instance?: CloudInstance;
+  latest?: CloudLatest;
+  maxConnections?: number | null;
+  recommendations?: CloudRecommendation[];
+}
+
+export interface MetricPoint {
+  t: string;
+  v: number | null;
+}
+
+export interface MetricSeries {
+  label: string;
+  unit: string;
+  points: MetricPoint[];
+}
+
+export interface CloudMetricsResponse {
+  available: boolean;
+  reason?: string;
+  periodSeconds?: number;
+  minutes?: number;
+  metrics?: Record<string, MetricSeries>;
+}
+
 export interface Activity {
   pid: number;
   username: string | null;
