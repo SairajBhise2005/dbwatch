@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Table2,
   Eye,
@@ -33,7 +33,12 @@ interface NewColumn {
 }
 
 export function Explorer() {
-  const { data, error, loading, reload } = usePolling<ExplorerData>('/explorer', 30_000);
+  const [databases, setDatabases] = useState<string[]>([]);
+  const [selectedDb, setSelectedDb] = useState('');
+  const { data, error, loading, reload } = usePolling<ExplorerData>(
+    selectedDb ? `/explorer?db=${encodeURIComponent(selectedDb)}` : '/explorer',
+    30_000
+  );
   const [modal, setModal] = useState<null | 'db' | 'table'>(null);
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({
     tables: true,
@@ -46,6 +51,25 @@ export function Explorer() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
 
+  // Load the database list once; default the selector to the connected DB.
+  function loadDatabases(pick?: string) {
+    api
+      .get<{ databases: string[]; current: string }>('/explorer/databases')
+      .then(({ data }) => {
+        setDatabases(data.databases);
+        if (pick) setSelectedDb(pick);
+        else setSelectedDb((s) => s || data.current);
+      })
+      .catch(() => {});
+  }
+  useEffect(loadDatabases, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function switchDb(db: string) {
+    setSelectedDb(db);
+    setSelected(null);
+    setDetail(null);
+  }
+
   function toggle(key: SectionKey) {
     setOpen((o) => ({ ...o, [key]: !o[key] }));
   }
@@ -56,8 +80,10 @@ export function Explorer() {
     setDetailError('');
     setDetail(null);
     try {
+      const q = new URLSearchParams({ schema });
+      if (selectedDb) q.set('db', selectedDb);
       const { data } = await api.get<TableDetail>(
-        `/explorer/tables/${encodeURIComponent(name)}?schema=${encodeURIComponent(schema)}`
+        `/explorer/tables/${encodeURIComponent(name)}?${q.toString()}`
       );
       setDetail(data);
     } catch (err) {
@@ -71,10 +97,20 @@ export function Explorer() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-sm text-muted">Database</label>
+        <select
+          value={selectedDb}
+          onChange={(e) => switchDb(e.target.value)}
+          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm"
+        >
+          {databases.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
         <button
           onClick={() => setModal('db')}
-          className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"
+          className="ml-auto flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"
         >
           <Plus size={15} /> New database
         </button>
@@ -215,17 +251,23 @@ export function Explorer() {
       </div>
 
       {modal === 'db' && (
-        <CreateDatabaseModal onClose={() => setModal(null)} onDone={reload} />
+        <CreateDatabaseModal
+          onClose={() => setModal(null)}
+          onCreated={(newName) => {
+            switchDb(newName);
+            loadDatabases(newName);
+          }}
+        />
       )}
       {modal === 'table' && (
-        <CreateTableModal onClose={() => setModal(null)} onDone={reload} />
+        <CreateTableModal db={selectedDb} onClose={() => setModal(null)} onDone={reload} />
       )}
     </div>
   );
 }
 
 // ── Create database modal ──
-function CreateDatabaseModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function CreateDatabaseModal({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string) => void }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -234,7 +276,7 @@ function CreateDatabaseModal({ onClose, onDone }: { onClose: () => void; onDone:
     setErr('');
     try {
       await api.post('/explorer/databases', { name });
-      onDone();
+      onCreated(name);
       onClose();
     } catch (e) {
       setErr(extractError(e));
@@ -260,7 +302,7 @@ function CreateDatabaseModal({ onClose, onDone }: { onClose: () => void; onDone:
 }
 
 // ── Create table modal ──
-function CreateTableModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function CreateTableModal({ db, onClose, onDone }: { db: string; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState('');
   const [cols, setCols] = useState<NewColumn[]>([
     { name: 'id', type: 'serial', nullable: false, primaryKey: true },
@@ -277,7 +319,7 @@ function CreateTableModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     setBusy(true);
     setErr('');
     try {
-      await api.post('/explorer/tables', { name, columns: cols });
+      await api.post('/explorer/tables', { db, name, columns: cols });
       onDone();
       onClose();
     } catch (e) {
@@ -288,7 +330,7 @@ function CreateTableModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   }
 
   return (
-    <ModalShell title="Create table" onClose={onClose} wide>
+    <ModalShell title={`Create table in ${db || 'current database'}`} onClose={onClose} wide>
       <label className="mb-1 block text-sm text-muted">Table name</label>
       <input
         autoFocus

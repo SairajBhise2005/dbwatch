@@ -51,6 +51,25 @@ export const adminPool = new Pool({
   password: process.env.DB_ADMIN_PASSWORD,
 });
 
+// One-off admin client to an ARBITRARY database. Postgres connections
+// are per-database, so browsing/creating objects in a database other
+// than DB_NAME needs a fresh connection. Caller must .end().
+// ponytail: per-request client, fine for occasional admin browsing;
+// pool per-db if this ever gets hot.
+export function adminClientFor(database) {
+  return new pg.Client({
+    host: baseConfig.host,
+    port: baseConfig.port,
+    ssl: sslConfig,
+    connectionTimeoutMillis: 5_000,
+    user: process.env.DB_ADMIN_USER,
+    password: process.env.DB_ADMIN_PASSWORD,
+    database,
+  });
+}
+
+export const DEFAULT_DB = baseConfig.database;
+
 // Surface pool-level errors instead of crashing the process.
 monitorPool.on('error', (err) => {
   console.error('[monitorPool] idle client error:', err.message);

@@ -7,13 +7,29 @@
 // injection-safe.
 
 import { Router } from 'express';
-import { monitorPool, adminPool } from '../db.js';
+import { monitorPool, adminPool, adminClientFor, DEFAULT_DB } from '../db.js';
 
 const router = Router();
 
 // Strict identifier + type allowlists for the create-DDL endpoints.
 // Because names are validated against these, quoting them is injection-safe.
 const IDENT = /^[a-z_][a-z0-9_]{0,62}$/;
+
+// Run `fn` against a chosen database. The connected DB_NAME uses the
+// long-lived pools (read-only monitor, or admin for writes); any other
+// database uses a one-off admin client (connections are per-database).
+async function withDb(dbName, admin, fn) {
+  if (!dbName || dbName === DEFAULT_DB) {
+    return fn(admin ? adminPool : monitorPool);
+  }
+  const client = adminClientFor(dbName);
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
 const ALLOWED_TYPES = new Set([
   'smallint', 'integer', 'bigint', 'serial', 'bigserial',
   'text', 'varchar', 'boolean', 'date', 'timestamp', 'timestamptz',
@@ -22,43 +38,62 @@ const ALLOWED_TYPES = new Set([
 
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 
-router.get('/', async (_req, res, next) => {
+// List databases in the cluster (for the database selector).
+router.get('/databases', async (_req, res, next) => {
   try {
-    const [tables, views, indexes, roles, dbRow] = await Promise.all([
-      monitorPool.query(
-        `SELECT t.schemaname AS schema, t.relname AS name,
-                t.n_live_tup AS row_estimate,
-                pg_total_relation_size(t.relid) AS size_bytes,
-                (SELECT count(*) FROM pg_index i WHERE i.indrelid = t.relid) AS index_count
-           FROM pg_stat_user_tables t
-          ORDER BY pg_total_relation_size(t.relid) DESC`
-      ),
-      monitorPool.query(
-        `SELECT schemaname AS schema, viewname AS name
-           FROM pg_views
-          WHERE schemaname NOT IN ('pg_catalog','information_schema')
-          ORDER BY viewname`
-      ),
-      monitorPool.query(
-        `SELECT s.schemaname AS schema, s.relname AS table_name,
-                s.indexrelname AS name,
-                pg_relation_size(s.indexrelid) AS size_bytes,
-                s.idx_scan AS scans,
-                i.indisunique AS is_unique, i.indisprimary AS is_primary
-           FROM pg_stat_user_indexes s
-           JOIN pg_index i ON i.indexrelid = s.indexrelid
-          ORDER BY s.relname, s.indexrelname`
-      ),
-      monitorPool.query(
-        `SELECT rolname AS name, rolcanlogin AS can_login,
-                rolsuper AS is_superuser, rolcreatedb AS can_create_db,
-                rolcreaterole AS can_create_role
-           FROM pg_roles
-          WHERE rolname NOT LIKE 'pg\\_%'
-          ORDER BY rolname`
-      ),
-      monitorPool.query('SELECT current_database() AS db'),
-    ]);
+    const { rows } = await monitorPool.query(
+      `SELECT datname AS name FROM pg_database
+        WHERE datistemplate = false AND datallowconn
+        ORDER BY datname`
+    );
+    res.json({ databases: rows.map((r) => r.name), current: DEFAULT_DB });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/', async (req, res, next) => {
+  const db = req.query.db ? String(req.query.db) : '';
+  if (db && !IDENT.test(db)) return res.status(400).json({ error: 'Invalid database name' });
+  try {
+    const result = await withDb(db, false, (c) =>
+      Promise.all([
+        c.query(
+          `SELECT t.schemaname AS schema, t.relname AS name,
+                  t.n_live_tup AS row_estimate,
+                  pg_total_relation_size(t.relid) AS size_bytes,
+                  (SELECT count(*) FROM pg_index i WHERE i.indrelid = t.relid) AS index_count
+             FROM pg_stat_user_tables t
+            ORDER BY pg_total_relation_size(t.relid) DESC`
+        ),
+        c.query(
+          `SELECT schemaname AS schema, viewname AS name
+             FROM pg_views
+            WHERE schemaname NOT IN ('pg_catalog','information_schema')
+            ORDER BY viewname`
+        ),
+        c.query(
+          `SELECT s.schemaname AS schema, s.relname AS table_name,
+                  s.indexrelname AS name,
+                  pg_relation_size(s.indexrelid) AS size_bytes,
+                  s.idx_scan AS scans,
+                  i.indisunique AS is_unique, i.indisprimary AS is_primary
+             FROM pg_stat_user_indexes s
+             JOIN pg_index i ON i.indexrelid = s.indexrelid
+            ORDER BY s.relname, s.indexrelname`
+        ),
+        c.query(
+          `SELECT rolname AS name, rolcanlogin AS can_login,
+                  rolsuper AS is_superuser, rolcreatedb AS can_create_db,
+                  rolcreaterole AS can_create_role
+             FROM pg_roles
+            WHERE rolname NOT LIKE 'pg\\_%'
+            ORDER BY rolname`
+        ),
+        c.query('SELECT current_database() AS db'),
+      ])
+    );
+    const [tables, views, indexes, roles, dbRow] = result;
 
     res.json({
       database: dbRow.rows[0].db,
@@ -95,41 +130,45 @@ router.get('/', async (_req, res, next) => {
 router.get('/tables/:name', async (req, res, next) => {
   const name = req.params.name;
   const schema = req.query.schema || 'public';
+  const db = req.query.db ? String(req.query.db) : '';
+  if (db && !IDENT.test(db)) return res.status(400).json({ error: 'Invalid database name' });
   try {
-    // Resolve size + row estimate; regclass cast 404s if table is unknown.
-    let meta;
-    try {
-      meta = await monitorPool.query(
-        `SELECT pg_total_relation_size(format('%I.%I',$1::text,$2::text)::regclass) AS size_bytes,
-                COALESCE((SELECT n_live_tup FROM pg_stat_user_tables
-                           WHERE schemaname=$1::text AND relname=$2::text), 0) AS row_estimate`,
-        [schema, name]
-      );
-    } catch {
+    const out = await withDb(db, false, async (c) => {
+      let meta;
+      try {
+        meta = await c.query(
+          `SELECT pg_total_relation_size(format('%I.%I',$1::text,$2::text)::regclass) AS size_bytes,
+                  COALESCE((SELECT n_live_tup FROM pg_stat_user_tables
+                             WHERE schemaname=$1::text AND relname=$2::text), 0) AS row_estimate`,
+          [schema, name]
+        );
+      } catch {
+        return { notFound: true };
+      }
+      const [columns, indexes] = await Promise.all([
+        c.query(
+          `SELECT column_name AS name, data_type AS type,
+                  (is_nullable = 'YES') AS nullable, column_default AS default_value
+             FROM information_schema.columns
+            WHERE table_schema = $1 AND table_name = $2
+            ORDER BY ordinal_position`,
+          [schema, name]
+        ),
+        c.query(
+          `SELECT indexname AS name, indexdef AS definition
+             FROM pg_indexes
+            WHERE schemaname = $1 AND tablename = $2
+            ORDER BY indexname`,
+          [schema, name]
+        ),
+      ]);
+      return { meta, columns, indexes };
+    });
+
+    if (out.notFound || out.columns.rowCount === 0) {
       return res.status(404).json({ error: 'Table not found' });
     }
-
-    const [columns, indexes] = await Promise.all([
-      monitorPool.query(
-        `SELECT column_name AS name, data_type AS type,
-                (is_nullable = 'YES') AS nullable, column_default AS default_value
-           FROM information_schema.columns
-          WHERE table_schema = $1 AND table_name = $2
-          ORDER BY ordinal_position`,
-        [schema, name]
-      ),
-      monitorPool.query(
-        `SELECT indexname AS name, indexdef AS definition
-           FROM pg_indexes
-          WHERE schemaname = $1 AND tablename = $2
-          ORDER BY indexname`,
-        [schema, name]
-      ),
-    ]);
-
-    if (columns.rowCount === 0) {
-      return res.status(404).json({ error: 'Table not found' });
-    }
+    const { meta, columns, indexes } = out;
 
     res.json({
       schema,
@@ -168,10 +207,12 @@ router.post('/databases', async (req, res) => {
 router.post('/tables', async (req, res) => {
   const name = String(req.body?.name || '').trim();
   const schema = String(req.body?.schema || 'public').trim();
+  const db = String(req.body?.db || '').trim();
   const columns = Array.isArray(req.body?.columns) ? req.body.columns : [];
 
   if (!IDENT.test(name)) return res.status(400).json({ error: 'Invalid table name.' });
   if (!IDENT.test(schema)) return res.status(400).json({ error: 'Invalid schema name.' });
+  if (db && !IDENT.test(db)) return res.status(400).json({ error: 'Invalid database name.' });
   if (columns.length === 0) return res.status(400).json({ error: 'At least one column is required.' });
 
   const defs = [];
@@ -190,8 +231,8 @@ router.post('/tables', async (req, res) => {
 
   const ddl = `CREATE TABLE "${schema}"."${name}" (\n  ${defs.join(',\n  ')}\n)`;
   try {
-    await adminPool.query(ddl);
-    res.json({ ok: true, created: `${schema}.${name}`, ddl });
+    await withDb(db, true, (c) => c.query(ddl));
+    res.json({ ok: true, created: `${db || DEFAULT_DB}.${schema}.${name}`, ddl });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
