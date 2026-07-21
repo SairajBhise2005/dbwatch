@@ -55,18 +55,42 @@ export function Cost() {
         ? 'var(--color-ok)'
         : 'var(--color-warn)';
 
+  const billing = data?.billing;
+
   return (
     <div className="space-y-6">
-      {/* Monthly bill breakdown */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={<DollarSign size={18} />} label="Instance / month" value={money(b?.instanceCost)} sub={data?.instance?.class} />
-        <StatCard icon={<DollarSign size={18} />} label="Storage / month" value={money(b?.storageCost)} sub={`${data?.instance?.storageGb ?? 0} GB`} />
-        <StatCard
-          icon={<DollarSign size={18} />}
-          label="Projected monthly bill"
-          value={money(b?.totalMonthly)}
-          tone="ok"
-        />
+      {/* Real billed spend (Cost Explorer) */}
+      {billing?.available ? (
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Actual spend</h2>
+            <Badge tone="info">Cost Explorer</Badge>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard icon={<DollarSign size={18} />} label="Spend this month" value={money(billing.monthToDate)} sub="month to date" tone="ok" />
+            <StatCard icon={<DollarSign size={18} />} label="Forecast (month end)" value={money(billing.forecastMonthEnd)} sub="projected" />
+            <StatCard icon={<DollarSign size={18} />} label="Last month" value={money(billing.lastMonth)} sub="billed total" />
+          </div>
+        </div>
+      ) : (
+        <Card className="flex items-start gap-3 p-4">
+          <Info size={18} className="mt-0.5 text-[color:var(--color-muted)]" />
+          <p className="text-sm text-muted">
+            Real billing unavailable — showing estimates. Enable AWS Cost Explorer and grant the
+            EC2 role <code>ce:GetCostAndUsage</code> / <code>ce:GetCostForecast</code>.
+            {billing?.reason ? ` (${billing.reason})` : ''}
+          </p>
+        </Card>
+      )}
+
+      {/* Estimated monthly bill (pricing model) */}
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-muted">Estimated (pricing model)</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard icon={<DollarSign size={18} />} label="Instance / month" value={money(b?.instanceCost)} sub={data?.instance?.class} />
+          <StatCard icon={<DollarSign size={18} />} label="Storage / month" value={money(b?.storageCost)} sub={`${data?.instance?.storageGb ?? 0} GB`} />
+          <StatCard icon={<DollarSign size={18} />} label="Projected monthly bill" value={money(b?.totalMonthly)} tone="ok" />
+        </div>
       </div>
 
       {/* Recommendation */}

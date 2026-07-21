@@ -117,6 +117,14 @@ The backend reads CloudWatch/RDS via the EC2 instance's IAM role (no keys).
 3. **Add permissions** — attach these AWS-managed policies:
    - **`CloudWatchReadOnlyAccess`**
    - **`AmazonRDSReadOnlyAccess`**
+   - For **real billing** on the Cost Realization page, also add an **inline
+     policy** with Cost Explorer read access:
+     ```json
+     { "Version": "2012-10-17", "Statement": [{
+         "Effect": "Allow",
+         "Action": ["ce:GetCostAndUsage", "ce:GetCostForecast", "ce:GetDimensionValues"],
+         "Resource": "*" }] }
+     ```
 4. **Role name:** `dbwatch-monitoring` → **Create role.**
 5. Attach it to the instance: **EC2 → Instances → `dbwatch-host` → Actions →
    Security → Modify IAM role →** select **`dbwatch-monitoring`** → **Update IAM
@@ -124,6 +132,12 @@ The backend reads CloudWatch/RDS via the EC2 instance's IAM role (no keys).
 
 > No access keys are stored anywhere — the AWS SDK on the instance picks up the
 > role automatically.
+
+6. **Enable Cost Explorer** (once, for real billing): Billing console → **Cost
+   Explorer → Enable**. Data takes **~24h** to populate. Until then (or without
+   the `ce:*` permissions above), Cost Realization falls back to the pricing
+   estimate. The dashboard caches Cost Explorer results ~6h (CE bills ~$0.01
+   per API call).
 
 ---
 

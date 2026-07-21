@@ -6,7 +6,7 @@
 // for other regions.
 
 import { Router } from 'express';
-import { awsConfigured, getInstanceInfo, getMetricSeries } from '../aws.js';
+import { awsConfigured, getInstanceInfo, getMetricSeries, getRdsCost } from '../aws.js';
 
 const router = Router();
 const HOURS_PER_MONTH = 730;
@@ -54,9 +54,10 @@ router.get('/overview', async (_req, res, next) => {
       });
     }
 
-    const [instance, series] = await Promise.all([
+    const [instance, series, billing] = await Promise.all([
       getInstanceInfo(),
       getMetricSeries(180),
+      getRdsCost(),
     ]);
 
     if (!instance.available) {
@@ -129,6 +130,9 @@ router.get('/overview', async (_req, res, next) => {
     res.json({
       available: true,
       currency: 'USD',
+      // Real billed spend from Cost Explorer (service-level RDS); may be
+      // { available:false } if CE isn't enabled / IAM lacks ce:* perms.
+      billing: { source: 'cost-explorer', ...billing },
       pricingNote: 'Estimated on-demand, single-AZ, us-east-1. Excludes data transfer, I/O, backups beyond free tier.',
       instance: { class: cls, storageGb, hourly },
       breakdown: { instanceCost, storageCost, totalMonthly },

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.720.0",
+    "@aws-sdk/client-cost-explorer": "^3.720.0",
     "@aws-sdk/client-rds": "^3.720.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

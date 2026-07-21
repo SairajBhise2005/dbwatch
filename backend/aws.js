@@ -11,6 +11,11 @@
 
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
+import {
+  CostExplorerClient,
+  GetCostAndUsageCommand,
+  GetCostForecastCommand,
+} from '@aws-sdk/client-cost-explorer';
 
 const REGION = process.env.AWS_REGION || '';
 const INSTANCE_ID = process.env.RDS_INSTANCE_ID || '';
@@ -25,6 +30,7 @@ export function awsConfig() {
 
 let _cw = null;
 let _rds = null;
+let _ce = null;
 function cw() {
   if (!_cw) _cw = new CloudWatchClient({ region: REGION });
   return _cw;
@@ -33,6 +39,15 @@ function rds() {
   if (!_rds) _rds = new RDSClient({ region: REGION });
   return _rds;
 }
+function ce() {
+  // Cost Explorer is a global service; its endpoint lives in us-east-1
+  // regardless of where the RDS instance runs.
+  if (!_ce) _ce = new CostExplorerClient({ region: 'us-east-1' });
+  return _ce;
+}
+
+const RDS_SERVICE = 'Amazon Relational Database Service';
+const RDS_FILTER = { Dimensions: { Key: 'SERVICE', Values: [RDS_SERVICE] } };
 
 // The CloudWatch metrics we chart. `stat` + `unit` drive the frontend.
 export const METRICS = [
@@ -141,5 +156,88 @@ export async function getInstanceInfo() {
     };
   } catch (err) {
     return { available: false, reason: err.message };
+  }
+}
+
+// ── Real billing via Cost Explorer ──────────────────────────────
+// Returns actual RDS spend (service-level): month-to-date, last month,
+// and a projected month-end total (MTD + forecast of the remainder).
+// Cached 6h — CE bills ~$0.01/call and the page polls every 60s.
+// ponytail: global 6h cache; make it per-window only if this ever grows.
+let _costCache = null;
+const COST_TTL_MS = 6 * 60 * 60 * 1000;
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const round2 = (n) => (n == null ? null : Math.round(n * 100) / 100);
+
+export async function getRdsCost() {
+  if (!awsConfigured()) {
+    return { available: false, reason: 'AWS_REGION / RDS_INSTANCE_ID not set' };
+  }
+  if (_costCache && Date.now() - _costCache.ts < COST_TTL_MS) return _costCache.data;
+
+  try {
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    const thisMonthStart = new Date(Date.UTC(y, m, 1));
+    const lastMonthStart = new Date(Date.UTC(y, m - 1, 1));
+    const nextMonthStart = new Date(Date.UTC(y, m + 1, 1));
+    const today = new Date(Date.UTC(y, m, now.getUTCDate()));
+
+    // Actual: last full month + month-to-date (two monthly buckets).
+    const usage = await ce().send(
+      new GetCostAndUsageCommand({
+        TimePeriod: { Start: isoDay(lastMonthStart), End: isoDay(today) },
+        Granularity: 'MONTHLY',
+        Metrics: ['UnblendedCost'],
+        Filter: RDS_FILTER,
+      })
+    );
+    const buckets = usage.ResultsByTime || [];
+    const amt = (b) => Number(b?.Total?.UnblendedCost?.Amount ?? 0);
+    let monthToDate = null;
+    let lastMonth = null;
+    let currency = 'USD';
+    for (const b of buckets) {
+      const start = b.TimePeriod?.Start;
+      currency = b.Total?.UnblendedCost?.Unit || currency;
+      if (start === isoDay(thisMonthStart)) monthToDate = amt(b);
+      else if (start === isoDay(lastMonthStart)) lastMonth = amt(b);
+    }
+
+    // Forecast the remainder of the month, then project the full total.
+    let forecastMonthEnd = null;
+    try {
+      if (isoDay(today) !== isoDay(nextMonthStart)) {
+        const fc = await ce().send(
+          new GetCostForecastCommand({
+            TimePeriod: { Start: isoDay(today), End: isoDay(nextMonthStart) },
+            Metric: 'UNBLENDED_COST',
+            Granularity: 'MONTHLY',
+            Filter: RDS_FILTER,
+          })
+        );
+        const remainder = fc.Total?.Amount != null ? Number(fc.Total.Amount) : null;
+        if (remainder != null) forecastMonthEnd = (monthToDate ?? 0) + remainder;
+      }
+    } catch {
+      /* forecast needs some history / valid future window — leave null */
+    }
+
+    const data = {
+      available: true,
+      currency,
+      monthToDate: round2(monthToDate),
+      lastMonth: round2(lastMonth),
+      forecastMonthEnd: round2(forecastMonthEnd),
+    };
+    _costCache = { ts: Date.now(), data };
+    return data;
+  } catch (err) {
+    // Negative-cache the failure briefly so a missing permission / disabled
+    // Cost Explorer doesn't get retried on every poll.
+    const data = { available: false, reason: err.message };
+    _costCache = { ts: Date.now(), data };
+    return data;
   }
 }

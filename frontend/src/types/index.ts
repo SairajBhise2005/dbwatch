@@ -86,10 +86,21 @@ export interface CostScenario {
   deltaMonthly: number | null;
 }
 
+export interface CostBilling {
+  available: boolean;
+  source?: string;
+  reason?: string;
+  currency?: string;
+  monthToDate?: number | null;
+  lastMonth?: number | null;
+  forecastMonthEnd?: number | null;
+}
+
 export interface CostOverview {
   available: boolean;
   message?: string;
   currency?: string;
+  billing?: CostBilling;
   pricingNote?: string;
   instance?: { class: string; storageGb: number; hourly: number | null };
   breakdown?: { instanceCost: number | null; storageCost: number; totalMonthly: number | null };
