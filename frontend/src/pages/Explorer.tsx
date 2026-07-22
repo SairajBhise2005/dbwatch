@@ -14,6 +14,7 @@ import {
 import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
 import { Card, Badge, Skeleton, ErrorStrip } from '../components/ui';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { formatBytes, formatNumber, extractError } from '../lib/format';
 import type { ExplorerData, TableDetail } from '../types';
 
@@ -35,6 +36,10 @@ interface NewColumn {
 export function Explorer() {
   const [databases, setDatabases] = useState<string[]>([]);
   const [selectedDb, setSelectedDb] = useState('');
+  const [currentDb, setCurrentDb] = useState('');
+  const [dropTarget, setDropTarget] = useState<{ kind: 'db' | 'table'; schema?: string; name: string } | null>(null);
+  const [dropBusy, setDropBusy] = useState(false);
+  const [dropErr, setDropErr] = useState('');
   const { data, error, loading, reload } = usePolling<ExplorerData>(
     selectedDb ? `/explorer?db=${encodeURIComponent(selectedDb)}` : '/explorer',
     30_000
@@ -57,6 +62,7 @@ export function Explorer() {
       .get<{ databases: string[]; current: string }>('/explorer/databases')
       .then(({ data }) => {
         setDatabases(data.databases);
+        setCurrentDb(data.current);
         if (pick) setSelectedDb(pick);
         else setSelectedDb((s) => s || data.current);
       })
@@ -93,6 +99,30 @@ export function Explorer() {
     }
   }
 
+  async function confirmDrop() {
+    if (!dropTarget) return;
+    setDropBusy(true);
+    setDropErr('');
+    try {
+      if (dropTarget.kind === 'db') {
+        await api.delete(`/explorer/databases/${encodeURIComponent(dropTarget.name)}`);
+        loadDatabases(dropTarget.name === selectedDb ? currentDb : undefined);
+      } else {
+        const qp = new URLSearchParams({ schema: dropTarget.schema || 'public' });
+        if (selectedDb) qp.set('db', selectedDb);
+        await api.delete(`/explorer/tables/${encodeURIComponent(dropTarget.name)}?${qp.toString()}`);
+        reload();
+        setSelected(null);
+        setDetail(null);
+      }
+      setDropTarget(null);
+    } catch (e) {
+      setDropErr(extractError(e));
+    } finally {
+      setDropBusy(false);
+    }
+  }
+
   if (error && !data) return <ErrorStrip message={error} />;
 
   return (
@@ -108,6 +138,15 @@ export function Explorer() {
             <option key={d} value={d}>{d}</option>
           ))}
         </select>
+        {selectedDb && selectedDb !== currentDb && (
+          <button
+            onClick={() => setDropTarget({ kind: 'db', name: selectedDb })}
+            title="Drop this database"
+            className="flex items-center gap-1.5 rounded-lg border border-[color:var(--color-danger)]/50 px-3 py-2 text-sm text-[color:var(--color-danger)] hover:bg-[color:var(--color-danger)]/10"
+          >
+            <Trash2 size={15} /> Drop
+          </button>
+        )}
         <button
           onClick={() => setModal('db')}
           className="ml-auto flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"
@@ -148,20 +187,31 @@ export function Explorer() {
                 {data?.tables.map((t) => {
                   const id = `${t.schema}.${t.name}`;
                   return (
-                    <button
+                    <div
                       key={id}
-                      onClick={() => selectTable(t.schema, t.name)}
-                      className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
+                      className={`group flex items-center gap-1 rounded-md pr-1 text-sm ${
                         selected === id
                           ? 'bg-[color:var(--color-surface-2)] text-[color:var(--color-text)]'
                           : 'text-muted hover:bg-[color:var(--color-surface-2)]'
                       }`}
                     >
-                      <span className="truncate">{t.name}</span>
-                      <span className="ml-2 shrink-0 text-xs text-muted">
-                        {formatBytes(t.sizeBytes)}
-                      </span>
-                    </button>
+                      <button
+                        onClick={() => selectTable(t.schema, t.name)}
+                        className="flex min-w-0 flex-1 items-center justify-between px-2 py-1.5 text-left"
+                      >
+                        <span className="truncate">{t.name}</span>
+                        <span className="ml-2 shrink-0 text-xs text-muted">
+                          {formatBytes(t.sizeBytes)}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setDropTarget({ kind: 'table', schema: t.schema, name: t.name })}
+                        title="Drop table"
+                        className="shrink-0 rounded p-1 text-muted opacity-0 hover:text-[color:var(--color-danger)] group-hover:opacity-100"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   );
                 })}
               </Section>
@@ -245,7 +295,19 @@ export function Explorer() {
         ) : detailError ? (
           <ErrorStrip message={detailError} />
         ) : detail ? (
-          <TableDetailView detail={detail} />
+          <TableDetailView
+            detail={detail}
+            db={selectedDb}
+            onChanged={() => {
+              selectTable(detail.schema, detail.name);
+              reload();
+            }}
+            onRenamed={() => {
+              setSelected(null);
+              setDetail(null);
+              reload();
+            }}
+          />
         ) : null}
       </div>
       </div>
@@ -261,6 +323,30 @@ export function Explorer() {
       )}
       {modal === 'table' && (
         <CreateTableModal db={selectedDb} onClose={() => setModal(null)} onDone={reload} />
+      )}
+      {dropTarget && (
+        <ConfirmModal
+          open
+          title={`Drop ${dropTarget.kind === 'db' ? 'database' : 'table'}?`}
+          busy={dropBusy}
+          confirmLabel="Drop"
+          confirmText={dropTarget.name}
+          onCancel={() => {
+            setDropTarget(null);
+            setDropErr('');
+          }}
+          onConfirm={confirmDrop}
+          body={
+            <>
+              This permanently drops{' '}
+              <code>{dropTarget.kind === 'db' ? dropTarget.name : `${dropTarget.schema}.${dropTarget.name}`}</code>
+              {dropTarget.kind === 'db' ? ' and all its objects' : ''}. This cannot be undone.
+              {dropErr && (
+                <span className="mt-2 block text-[color:var(--color-danger)]">{dropErr}</span>
+              )}
+            </>
+          }
+        />
       )}
     </div>
   );
@@ -417,7 +503,60 @@ function ModalActions({ busy, disabled, onCancel, onConfirm, confirmLabel }: { b
   );
 }
 
-function TableDetailView({ detail }: { detail: TableDetail }) {
+function TableDetailView({
+  detail,
+  db,
+  onChanged,
+  onRenamed,
+}: {
+  detail: TableDetail;
+  db: string;
+  onChanged: () => void;
+  onRenamed: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [colName, setColName] = useState('');
+  const [colType, setColType] = useState('text');
+  const [colNotNull, setColNotNull] = useState(false);
+
+  async function alter(body: Record<string, unknown>, renamed = false) {
+    setBusy(true);
+    setErr('');
+    try {
+      await api.post(`/explorer/tables/${encodeURIComponent(detail.name)}/alter`, {
+        db,
+        schema: detail.schema,
+        ...body,
+      });
+      if (renamed) onRenamed();
+      else onChanged();
+    } catch (e) {
+      setErr(extractError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function addColumn() {
+    if (!colName) return;
+    alter({ action: 'add-column', column: colName, type: colType, nullable: !colNotNull });
+    setColName('');
+    setColType('text');
+    setColNotNull(false);
+    setAdding(false);
+  }
+  function dropColumn(name: string) {
+    if (window.confirm(`Drop column "${name}"? This cannot be undone.`)) {
+      alter({ action: 'drop-column', column: name });
+    }
+  }
+  function renameTable() {
+    const to = window.prompt('New table name:', detail.name);
+    if (to && to !== detail.name) alter({ action: 'rename-table', newName: to }, true);
+  }
+
   return (
     <div className="space-y-4">
       <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
@@ -439,12 +578,58 @@ function TableDetailView({ detail }: { detail: TableDetail }) {
           <div className="text-xs text-muted">Indexes</div>
           <div className="text-sm font-semibold">{detail.indexes.length}</div>
         </div>
+        <button
+          onClick={renameTable}
+          disabled={busy}
+          className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-surface-2)] disabled:opacity-50"
+        >
+          Rename
+        </button>
       </Card>
 
+      {err && <ErrorStrip message={err} />}
+
       <Card className="overflow-hidden">
-        <div className="border-b border-[color:var(--color-border)] px-4 py-2.5 text-sm font-semibold">
-          Columns
+        <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-2.5">
+          <span className="text-sm font-semibold">Columns</span>
+          <button
+            onClick={() => setAdding((a) => !a)}
+            className="flex items-center gap-1 text-xs text-[color:var(--color-brand)] hover:underline"
+          >
+            <Plus size={13} /> Add column
+          </button>
         </div>
+        {adding && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-2)]/40 px-4 py-2.5">
+            <input
+              autoFocus
+              value={colName}
+              onChange={(e) => setColName(e.target.value)}
+              placeholder="column name"
+              className="w-40 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+            />
+            <select
+              value={colType}
+              onChange={(e) => setColType(e.target.value)}
+              className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm"
+            >
+              {COLUMN_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1 text-xs text-muted">
+              <input type="checkbox" checked={colNotNull} onChange={(e) => setColNotNull(e.target.checked)} />
+              NOT NULL
+            </label>
+            <button
+              onClick={addColumn}
+              disabled={busy || !colName}
+              className="flex items-center gap-1 rounded-md bg-[color:var(--color-brand)] px-3 py-1.5 text-sm font-medium text-[color:var(--color-on-brand)] hover:opacity-90 disabled:opacity-50"
+            >
+              {busy && <Loader2 size={13} className="animate-spin" />} Add
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-[color:var(--color-border)] text-muted">
@@ -453,11 +638,12 @@ function TableDetailView({ detail }: { detail: TableDetail }) {
                 <th className="px-4 py-2 font-medium">Type</th>
                 <th className="px-4 py-2 font-medium">Nullable</th>
                 <th className="px-4 py-2 font-medium">Default</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
               {detail.columns.map((c) => (
-                <tr key={c.name} className="border-b border-[color:var(--color-border)]">
+                <tr key={c.name} className="group border-b border-[color:var(--color-border)]">
                   <td className="px-4 py-2 font-mono text-xs">{c.name}</td>
                   <td className="px-4 py-2 text-muted">{c.type}</td>
                   <td className="px-4 py-2">
@@ -469,6 +655,16 @@ function TableDetailView({ detail }: { detail: TableDetail }) {
                   </td>
                   <td className="px-4 py-2 font-mono text-xs text-muted">
                     {c.default ?? '—'}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      onClick={() => dropColumn(c.name)}
+                      disabled={busy}
+                      title="Drop column"
+                      className="rounded p-1 text-muted opacity-0 hover:text-[color:var(--color-danger)] group-hover:opacity-100 disabled:opacity-50"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -238,4 +238,81 @@ router.post('/tables', async (req, res) => {
   }
 });
 
+// DELETE /api/explorer/databases/:name — drop a database
+router.delete('/databases/:name', async (req, res) => {
+  const name = String(req.params.name || '').trim();
+  if (!IDENT.test(name)) return res.status(400).json({ error: 'Invalid database name.' });
+  if (name === DEFAULT_DB) {
+    return res.status(400).json({ error: 'Refusing to drop the database DBWatch is connected to.' });
+  }
+  try {
+    // FORCE terminates other connections so the drop can proceed (PG13+).
+    await adminPool.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+    res.json({ ok: true, dropped: name });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/explorer/tables/:name?db=&schema= — drop a table
+router.delete('/tables/:name', async (req, res) => {
+  const name = String(req.params.name || '').trim();
+  const schema = String(req.query.schema || 'public').trim();
+  const db = String(req.query.db || '').trim();
+  if (!IDENT.test(name)) return res.status(400).json({ error: 'Invalid table name.' });
+  if (!IDENT.test(schema)) return res.status(400).json({ error: 'Invalid schema name.' });
+  if (db && !IDENT.test(db)) return res.status(400).json({ error: 'Invalid database name.' });
+  try {
+    await withDb(db, true, (c) => c.query(`DROP TABLE "${schema}"."${name}"`));
+    res.json({ ok: true, dropped: `${schema}.${name}` });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/explorer/tables/:name/alter — add/drop/rename column, rename table
+router.post('/tables/:name/alter', async (req, res) => {
+  const table = String(req.params.name || '').trim();
+  const schema = String(req.body?.schema || 'public').trim();
+  const db = String(req.body?.db || '').trim();
+  const action = String(req.body?.action || '');
+  const col = String(req.body?.column || '').trim();
+  const to = String(req.body?.newName || '').trim();
+  const type = String(req.body?.type || '').trim().toLowerCase();
+
+  if (!IDENT.test(table)) return res.status(400).json({ error: 'Invalid table name.' });
+  if (!IDENT.test(schema)) return res.status(400).json({ error: 'Invalid schema name.' });
+  if (db && !IDENT.test(db)) return res.status(400).json({ error: 'Invalid database name.' });
+
+  const q = `"${schema}"."${table}"`;
+  let ddl;
+  switch (action) {
+    case 'add-column':
+      if (!IDENT.test(col)) return res.status(400).json({ error: 'Invalid column name.' });
+      if (!ALLOWED_TYPES.has(type)) return res.status(400).json({ error: `Unsupported type: ${type}` });
+      ddl = `ALTER TABLE ${q} ADD COLUMN "${col}" ${type}${req.body?.nullable === false ? ' NOT NULL' : ''}`;
+      break;
+    case 'drop-column':
+      if (!IDENT.test(col)) return res.status(400).json({ error: 'Invalid column name.' });
+      ddl = `ALTER TABLE ${q} DROP COLUMN "${col}"`;
+      break;
+    case 'rename-column':
+      if (!IDENT.test(col) || !IDENT.test(to)) return res.status(400).json({ error: 'Invalid column name.' });
+      ddl = `ALTER TABLE ${q} RENAME COLUMN "${col}" TO "${to}"`;
+      break;
+    case 'rename-table':
+      if (!IDENT.test(to)) return res.status(400).json({ error: 'Invalid table name.' });
+      ddl = `ALTER TABLE ${q} RENAME TO "${to}"`;
+      break;
+    default:
+      return res.status(400).json({ error: 'Unknown action.' });
+  }
+  try {
+    await withDb(db, true, (c) => c.query(ddl));
+    res.json({ ok: true, ddl });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 export default router;

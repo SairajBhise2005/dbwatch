@@ -65,6 +65,27 @@ export interface SessionsResponse {
   summary: SessionsSummary;
 }
 
+export interface Lock {
+  pid: number;
+  username: string | null;
+  database: string | null;
+  locktype: string;
+  mode: string;
+  granted: boolean;
+  relation: string | null;
+  state: string | null;
+  durationSeconds: number | null;
+  query: string;
+  blockedBy: number[];
+}
+
+export interface LocksResponse {
+  locks: Lock[];
+  total: number;
+  waiting: number;
+  blocked: number;
+}
+
 export type DiagStatus = 'ok' | 'warn' | 'fail';
 
 export interface DiagnosticCheck {

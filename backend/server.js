@@ -22,6 +22,7 @@ import activityRouter from './routes/activity.js';
 import cloudRouter from './routes/cloud.js';
 import diagnosticsRouter from './routes/diagnostics.js';
 import costRouter from './routes/cost.js';
+import locksRouter from './routes/locks.js';
 import { requireAuth, loginHandler } from './middleware/auth.js';
 
 dotenv.config();
@@ -71,6 +72,7 @@ app.use('/api/cost', costRouter);
 
 // Automated health diagnostics
 app.use('/api/diagnostics', diagnosticsRouter);
+app.use('/api/locks', locksRouter);
 
 // --- 404 + error handling ---
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

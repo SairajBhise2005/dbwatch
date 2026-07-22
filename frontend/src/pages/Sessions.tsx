@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { XCircle, RefreshCw, CheckCircle2, AlertTriangle, Users, Network, Activity } from 'lucide-react';
+import { XCircle, RefreshCw, CheckCircle2, AlertTriangle, Users, Network, Activity, Lock as LockIcon } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
 import { Card, Badge, StatCard, Skeleton, ErrorStrip } from '../components/ui';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { formatDuration, extractError } from '../lib/format';
-import type { Session, SessionsResponse, Diagnostics, DiagStatus } from '../types';
+import type { Session, SessionsResponse, Diagnostics, DiagStatus, LocksResponse } from '../types';
 
 export function Sessions() {
   const { data, error, loading, reload } = usePolling<SessionsResponse>(
@@ -13,6 +13,7 @@ export function Sessions() {
     10_000
   );
   const { data: diag } = usePolling<Diagnostics>('/diagnostics', 15_000);
+  const { data: locks } = usePolling<LocksResponse>('/locks', 10_000);
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [target, setTarget] = useState<Session | null>(null);
@@ -110,6 +111,58 @@ export function Sessions() {
               </div>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* Active locks */}
+      {locks && (
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-4 py-2.5">
+            <LockIcon size={15} className="text-muted" />
+            <h2 className="text-sm font-semibold">Active Locks</h2>
+            <span className="ml-auto text-xs text-muted">
+              {locks.total} held ·{' '}
+              <span className={locks.waiting ? 'text-[color:var(--color-warn)]' : ''}>{locks.waiting} waiting</span> ·{' '}
+              <span className={locks.blocked ? 'text-[color:var(--color-danger)]' : ''}>{locks.blocked} blocked</span>
+            </span>
+          </div>
+          {locks.locks.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-muted">No active locks.</p>
+          ) : (
+            <div className="max-h-72 overflow-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-muted">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">PID</th>
+                    <th className="px-4 py-2 font-medium">User</th>
+                    <th className="px-4 py-2 font-medium">Object</th>
+                    <th className="px-4 py-2 font-medium">Mode</th>
+                    <th className="px-4 py-2 font-medium">Granted</th>
+                    <th className="px-4 py-2 font-medium">Blocked by</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {locks.locks.map((l, i) => (
+                    <tr
+                      key={`${l.pid}-${i}`}
+                      className={`border-b border-[color:var(--color-border)] ${l.blockedBy.length ? 'bg-[color:var(--color-danger)]/10' : !l.granted ? 'bg-[color:var(--color-warn)]/10' : ''}`}
+                    >
+                      <td className="px-4 py-2 tabular-nums">{l.pid}</td>
+                      <td className="px-4 py-2">{l.username ?? '—'}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{l.relation ?? l.locktype}</td>
+                      <td className="px-4 py-2 text-xs text-muted">{l.mode}</td>
+                      <td className="px-4 py-2">
+                        {l.granted ? <Badge tone="ok">yes</Badge> : <Badge tone="warn">waiting</Badge>}
+                      </td>
+                      <td className="px-4 py-2 tabular-nums text-xs">
+                        {l.blockedBy.length ? l.blockedBy.join(', ') : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
