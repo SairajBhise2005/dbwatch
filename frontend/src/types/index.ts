@@ -118,11 +118,21 @@ export interface CostBilling {
   forecastMonthEnd?: number | null;
 }
 
+export interface CostSavingRec {
+  id: number;
+  severity: 'High' | 'Medium' | 'Low';
+  category: string;
+  detail: string;
+  recommendation: string;
+  monthlySavings?: number | null;
+}
+
 export interface CostOverview {
   available: boolean;
   message?: string;
   currency?: string;
   billing?: CostBilling;
+  recommendations?: CostSavingRec[];
   pricingNote?: string;
   instance?: { class: string; storageGb: number; hourly: number | null };
   breakdown?: { instanceCost: number | null; storageCost: number; totalMonthly: number | null };

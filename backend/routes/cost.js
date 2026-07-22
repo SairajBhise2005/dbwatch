@@ -127,12 +127,62 @@ router.get('/overview', async (_req, res, next) => {
       };
     }
 
+    // Additional savings recommendations (idle, storage, Reserved Instance),
+    // each with an estimated $ impact. Metric-based ones are skipped when the
+    // CloudWatch series is unavailable.
+    const recommendations = [];
+    let rid = 0;
+    const addRec = (severity, category, detail, recommendation, monthlySavings) =>
+      recommendations.push({ id: ++rid, severity, category, detail, recommendation, monthlySavings });
+
+    const avgConns = avg(m.connections?.points);
+    const lastFreeStorage = (m.freeStorage?.points || []).filter((p) => p.v != null).at(-1)?.v ?? null;
+
+    // Idle instance — almost no connections and very low CPU.
+    if (avgConns != null && avgCpu != null && avgConns < 1 && avgCpu < 10 && instanceCost != null) {
+      addRec(
+        'Medium',
+        'Idle instance',
+        `Avg ${avgConns.toFixed(1)} connections and ${avgCpu.toFixed(1)}% CPU — the instance looks idle.`,
+        'Stop or delete it if unused; you pay for the instance even when idle.',
+        instanceCost
+      );
+    }
+
+    // Storage over-provisioning — lots of unused allocated storage.
+    if (lastFreeStorage != null && storageGb) {
+      const totalBytes = storageGb * 1024 ** 3;
+      const freePct = (lastFreeStorage / totalBytes) * 100;
+      const unusedGb = lastFreeStorage / 1024 ** 3;
+      if (freePct > 70 && storageGb > 20) {
+        addRec(
+          'Low',
+          'Storage over-provisioned',
+          `~${unusedGb.toFixed(1)} GB of ${storageGb} GB is free (${freePct.toFixed(0)}%).`,
+          'RDS storage cannot shrink — right-size allocation at the next migration/restore.',
+          round2(unusedGb * STORAGE_GB_MONTH)
+        );
+      }
+    }
+
+    // Reserved Instance — steady 24×7 workloads save ~35% vs on-demand.
+    if (instanceCost != null) {
+      addRec(
+        'Low',
+        'Reserved Instance',
+        `Steady usage on ${cls} at ~$${instanceCost}/mo on-demand.`,
+        'A 1-year Reserved Instance / Savings Plan typically saves ~35% for always-on databases.',
+        round2(instanceCost * 0.35)
+      );
+    }
+
     res.json({
       available: true,
       currency: 'USD',
       // Real billed spend from Cost Explorer (service-level RDS); may be
       // { available:false } if CE isn't enabled / IAM lacks ce:* perms.
       billing: { source: 'cost-explorer', ...billing },
+      recommendations,
       pricingNote: 'Estimated on-demand, single-AZ, us-east-1. Excludes data transfer, I/O, backups beyond free tier.',
       instance: { class: cls, storageGb, hourly },
       breakdown: { instanceCost, storageCost, totalMonthly },

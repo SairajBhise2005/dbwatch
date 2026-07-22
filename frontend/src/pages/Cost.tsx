@@ -130,6 +130,34 @@ export function Cost() {
         </Card>
       )}
 
+      {/* Savings opportunities */}
+      {data?.recommendations && data.recommendations.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold">Savings opportunities</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {data.recommendations.map((r) => (
+              <Card key={r.id} className="flex flex-col p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{r.category}</span>
+                  <Badge tone={r.severity === 'High' ? 'danger' : r.severity === 'Medium' ? 'warn' : 'neutral'}>
+                    {r.severity}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted">{r.detail}</p>
+                <div className="mt-3 border-t border-[color:var(--color-border)] pt-3 text-sm">
+                  <span className="font-medium">→ </span>{r.recommendation}
+                </div>
+                {r.monthlySavings != null && r.monthlySavings > 0 && (
+                  <div className="mt-2 text-sm font-semibold text-[color:var(--color-ok)]">
+                    Est. save ~{money(r.monthlySavings)}/month
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Scaling cost comparison */}
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-semibold">Monthly cost by instance size</h2>

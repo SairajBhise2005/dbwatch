@@ -10,6 +10,7 @@ import {
   Plus,
   Trash2,
   Loader2,
+  FileUp,
 } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
@@ -44,7 +45,7 @@ export function Explorer() {
     selectedDb ? `/explorer?db=${encodeURIComponent(selectedDb)}` : '/explorer',
     30_000
   );
-  const [modal, setModal] = useState<null | 'db' | 'table'>(null);
+  const [modal, setModal] = useState<null | 'db' | 'table' | 'import'>(null);
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({
     tables: true,
     views: false,
@@ -152,6 +153,12 @@ export function Explorer() {
           className="ml-auto flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"
         >
           <Plus size={15} /> New database
+        </button>
+        <button
+          onClick={() => setModal('import')}
+          className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"
+        >
+          <FileUp size={15} /> Import SQL
         </button>
         <button
           onClick={() => setModal('table')}
@@ -324,6 +331,9 @@ export function Explorer() {
       {modal === 'table' && (
         <CreateTableModal db={selectedDb} onClose={() => setModal(null)} onDone={reload} />
       )}
+      {modal === 'import' && (
+        <ImportSqlModal db={selectedDb} onClose={() => setModal(null)} onDone={reload} />
+      )}
       {dropTarget && (
         <ConfirmModal
           open
@@ -467,6 +477,56 @@ function CreateTableModal({ db, onClose, onDone }: { db: string; onClose: () => 
       </div>
       {err && <p className="mt-3 text-sm text-[color:var(--color-danger)]">{err}</p>}
       <ModalActions busy={busy} disabled={!name || cols.some((c) => !c.name)} onCancel={onClose} onConfirm={submit} confirmLabel="Create table" />
+    </ModalShell>
+  );
+}
+
+// ── Import .sql modal ──
+function ImportSqlModal({ db, onClose, onDone }: { db: string; onClose: () => void; onDone: () => void }) {
+  const [sql, setSql] = useState('');
+  const [filename, setFilename] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFilename(f.name);
+    f.text().then(setSql).catch(() => setErr('Could not read file'));
+  }
+
+  async function submit() {
+    setBusy(true);
+    setErr('');
+    try {
+      await api.post('/explorer/import', { db, sql });
+      onDone();
+      onClose();
+    } catch (e) {
+      setErr(extractError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title={`Import SQL into ${db || 'current database'}`} onClose={onClose} wide>
+      <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]">
+        <FileUp size={15} /> Choose .sql file
+        <input type="file" accept=".sql,text/plain" onChange={pickFile} className="hidden" />
+      </label>
+      {filename && <p className="mt-1 text-xs text-muted">{filename}</p>}
+      <p className="mb-1 mt-3 text-sm text-muted">…or paste SQL</p>
+      <textarea
+        value={sql}
+        onChange={(e) => setSql(e.target.value)}
+        spellCheck={false}
+        placeholder="CREATE TABLE …;"
+        className="h-48 w-full resize-y rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 font-mono text-xs outline-none focus:border-[color:var(--color-brand)]"
+      />
+      <p className="mt-2 text-xs text-muted">Runs in one transaction — rolls back entirely if any statement fails.</p>
+      {err && <p className="mt-2 text-sm text-[color:var(--color-danger)]">{err}</p>}
+      <ModalActions busy={busy} disabled={!sql.trim()} onCancel={onClose} onConfirm={submit} confirmLabel="Run import" />
     </ModalShell>
   );
 }

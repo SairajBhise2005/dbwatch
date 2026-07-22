@@ -238,6 +238,31 @@ router.post('/tables', async (req, res) => {
   }
 });
 
+// POST /api/explorer/import — run a .sql script (schema build) in a
+// transaction against the chosen database; rolls back on any error.
+router.post('/import', async (req, res) => {
+  const db = String(req.body?.db || '').trim();
+  const sql = String(req.body?.sql || '');
+  if (db && !IDENT.test(db)) return res.status(400).json({ error: 'Invalid database name.' });
+  if (!sql.trim()) return res.status(400).json({ error: 'No SQL provided.' });
+  try {
+    await withDb(db, true, async (c) => {
+      await c.query('BEGIN');
+      await c.query('SET LOCAL statement_timeout = 60000');
+      try {
+        await c.query(sql); // multi-statement scripts run in one call
+        await c.query('COMMIT');
+      } catch (e) {
+        await c.query('ROLLBACK').catch(() => {});
+        throw e;
+      }
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // DELETE /api/explorer/databases/:name — drop a database
 router.delete('/databases/:name', async (req, res) => {
   const name = String(req.params.name || '').trim();
