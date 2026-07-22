@@ -24,6 +24,7 @@ import diagnosticsRouter from './routes/diagnostics.js';
 import costRouter from './routes/cost.js';
 import locksRouter from './routes/locks.js';
 import aiRouter from './routes/ai.js';
+import anomaliesRouter from './routes/anomalies.js';
 import { requireAuth, loginHandler } from './middleware/auth.js';
 
 dotenv.config();
@@ -77,6 +78,9 @@ app.use('/api/locks', locksRouter);
 
 // AI features (Gemini)
 app.use('/api/ai', aiRouter);
+
+// Statistical anomaly detection (CloudWatch metrics)
+app.use('/api/anomalies', anomaliesRouter);
 
 // --- 404 + error handling ---
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

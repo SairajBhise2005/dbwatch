@@ -9,7 +9,7 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-import { Cloud as CloudIcon, Info, Lightbulb, Server } from 'lucide-react';
+import { Cloud as CloudIcon, Info, Lightbulb, Server, AlertTriangle } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { Card, Badge, StatCard, Skeleton, ErrorStrip } from '../components/ui';
 import { formatBytes } from '../lib/format';
@@ -18,6 +18,7 @@ import type {
   CloudMetricsResponse,
   MetricSeries,
   CloudRecommendation,
+  AnomaliesResponse,
 } from '../types';
 
 const RANGES = [
@@ -45,6 +46,10 @@ export function Cloud() {
   const [minutes, setMinutes] = useState(180);
   const { data: mx } = usePolling<CloudMetricsResponse>(
     `/cloud/metrics?minutes=${minutes}`,
+    60_000
+  );
+  const { data: anom } = usePolling<AnomaliesResponse>(
+    `/anomalies?minutes=${minutes}`,
     60_000
   );
 
@@ -136,6 +141,40 @@ export function Cloud() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Anomaly detection */}
+      {anom?.available && (
+        <Card className="p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <AlertTriangle size={16} className="text-[color:var(--color-warn)]" />
+            <h2 className="text-sm font-semibold">Anomaly Detection</h2>
+            <Badge tone={anom.totalAnomalies ? 'warn' : 'ok'}>
+              {anom.totalAnomalies ?? 0} found
+            </Badge>
+            <span className="ml-auto text-xs text-muted">{anom.method}</span>
+          </div>
+          {!anom.totalAnomalies ? (
+            <p className="mt-2 text-sm text-muted">
+              No anomalies in the selected window — all metrics within normal range.
+            </p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {anom.results?.filter((r) => r.anomalies.length > 0).map((r) => (
+                <div key={r.key} className="text-sm">
+                  <span className="font-medium">{r.label}</span>
+                  <span className="text-muted"> — {r.anomalies.length} point(s): </span>
+                  {r.anomalies.slice(0, 4).map((a, i) => (
+                    <span key={i} className="mr-2 font-mono text-xs text-muted">
+                      {hhmm(a.t)} {a.direction === 'high' ? '↑' : '↓'}
+                      {a.v.toFixed(1)} (z{a.score})
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Charts */}

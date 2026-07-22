@@ -213,6 +213,30 @@ export interface CloudMetricsResponse {
   metrics?: Record<string, MetricSeries>;
 }
 
+export interface AnomalyPoint {
+  t: string;
+  v: number;
+  score: number;
+  direction: 'high' | 'low';
+}
+
+export interface AnomalyMetric {
+  key: string;
+  label: string;
+  unit: string;
+  baseline: { median: number; mad: number } | null;
+  anomalies: AnomalyPoint[];
+}
+
+export interface AnomaliesResponse {
+  available: boolean;
+  reason?: string;
+  minutes?: number;
+  method?: string;
+  totalAnomalies?: number;
+  results?: AnomalyMetric[];
+}
+
 export interface AiOptimizeResult {
   available: boolean;
   reason?: string;
