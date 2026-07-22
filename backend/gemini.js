@@ -5,7 +5,7 @@
 
 const KEY = process.env.GEMINI_API_KEY || "";
 // Model id is config — override with GEMINI_MODEL if the default changes.
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
 export function geminiConfigured() {
   return Boolean(KEY);
