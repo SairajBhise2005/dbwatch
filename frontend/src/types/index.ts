@@ -11,6 +11,7 @@ export interface DbStatus {
 export interface Health {
   service: string;
   uptimeSeconds: number;
+  tunnel?: boolean;
   db: DbStatus;
 }
 

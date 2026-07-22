@@ -132,13 +132,44 @@ modern best practice.
 3. Create SGs: `app-sg`, `bastion-sg`, `rds-sg`; set `rds-sg` 5432 ← `app-sg` + `bastion-sg`.
 4. Keep the DBWatch EC2 in the VPC; point `DB_HOST` at the RDS endpoint (already done).
 5. For human access, stand up a bastion **or** enable SSM on an instance; use §4.
-6. (Optional, future) If the backend ever runs **outside** the VPC, add SSH-tunnel
-   support to `db.js` using a Node SSH tunneling library (e.g. `tunnel-ssh`) so the
-   `pg` pool dials through the bastion. Not required for the current in-VPC design.
+6. If the backend runs **outside** the DB's VPC (or you simply prefer routing
+   through the bastion), enable the built-in **app-tunnel mode** — see §7.
 
 ---
 
-## 7. Conclusion
+## 7. App-tunnel mode (built in)
+
+`db.js` supports an optional SSH tunnel so the backend can reach a **private**
+RDS through a bastion. Set these in `backend/.env`:
+
+```
+SSH_HOST=bastion.example.com     # jump host (public subnet)
+SSH_PORT=22
+SSH_USER=ec2-user
+SSH_PRIVATE_KEY_PATH=/app/bastion_key.pem   # mount the key into the container
+SSH_KEY_PASSPHRASE=              # if the key is encrypted
+SSH_LOCAL_PORT=6543              # local forwarded port (default)
+```
+
+Behavior:
+- **Set** → the `pg` pools connect to `127.0.0.1:SSH_LOCAL_PORT`, forwarded via
+  the bastion to `DB_HOST:DB_PORT` (the RDS endpoint). TLS stays end-to-end to
+  RDS, so keep `DB_SSL=true`.
+- **Unset** → direct connection to `DB_HOST:DB_PORT` (public / in-VPC RDS). This
+  is the default and needs no config.
+
+So the **same build supports both public and private RDS** — it's purely an env
+choice. If the tunnel can't be established the server still boots and
+`/api/health` reports the DB as unreachable (`tunnel: true`); the header shows a
+🔒 *tunnel* indicator when active. For Docker, mount the key read-only
+(`-v /path/key.pem:/app/bastion_key.pem:ro`).
+
+> Prefer **SSM port forwarding** (§4 Option B) for *human* access — no bastion
+> SSH port to expose. The app-tunnel is for the *backend* when it's out-of-VPC.
+
+---
+
+## 8. Conclusion
 
 Transitioning to a private RDS is **fully feasible and low-risk** for DBWatch:
 the application already connects from inside the VPC, so making the database

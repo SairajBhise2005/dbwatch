@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Loader2, Lock } from 'lucide-react';
 import type { Health } from '../types';
 
 interface Props {
@@ -27,6 +27,11 @@ export function ConnectionBanner({ health, loading }: Props) {
       <Pill className="text-[color:var(--color-ok)]">
         <CheckCircle2 size={14} />
         {versionShort} · {health?.db.database}
+        {health?.tunnel && (
+          <span className="ml-1 flex items-center gap-0.5 text-muted" title="Connected via SSH tunnel (bastion)">
+            <Lock size={12} /> tunnel
+          </span>
+        )}
       </Pill>
     );
   }

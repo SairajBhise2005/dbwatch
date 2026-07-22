@@ -15,6 +15,7 @@
 
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
 
 dotenv.config();
 
@@ -23,9 +24,23 @@ const { Pool } = pg;
 const useSsl = String(process.env.DB_SSL).toLowerCase() === 'true';
 const sslConfig = useSsl ? { rejectUnauthorized: false } : false;
 
+// ── Optional SSH tunnel (private RDS via a bastion) ──────────────
+// When SSH_HOST/SSH_USER/SSH_PRIVATE_KEY_PATH are set, the pools connect
+// to a local port that is forwarded through the bastion to the RDS
+// endpoint (DB_HOST:DB_PORT). When unset, they connect directly — so a
+// public / in-VPC RDS works with no config, a private RDS works via the
+// tunnel. TLS is still end-to-end to RDS (keep DB_SSL=true).
+export const sshTunnelEnabled = Boolean(
+  process.env.SSH_HOST && process.env.SSH_USER && process.env.SSH_PRIVATE_KEY_PATH
+);
+const LOCAL_PORT = Number(process.env.SSH_LOCAL_PORT) || 6543;
+
+const targetHost = process.env.DB_HOST || '127.0.0.1';
+const targetPort = Number(process.env.DB_PORT) || 5432;
+
 const baseConfig = {
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.DB_PORT) || 5432,
+  host: sshTunnelEnabled ? '127.0.0.1' : targetHost,
+  port: sshTunnelEnabled ? LOCAL_PORT : targetPort,
   database: process.env.DB_NAME || 'postgres',
   ssl: sslConfig,
   // Keep pools small — this is a monitoring tool, not a busy app.
@@ -33,6 +48,30 @@ const baseConfig = {
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
 };
+
+async function startTunnel() {
+  try {
+    const { createTunnel } = await import('tunnel-ssh');
+    await createTunnel(
+      { autoClose: false, reconnectOnError: true },
+      { host: '127.0.0.1', port: LOCAL_PORT },
+      {
+        host: process.env.SSH_HOST,
+        port: Number(process.env.SSH_PORT) || 22,
+        username: process.env.SSH_USER,
+        privateKey: readFileSync(process.env.SSH_PRIVATE_KEY_PATH),
+        passphrase: process.env.SSH_KEY_PASSPHRASE || undefined,
+      },
+      { srcAddr: '127.0.0.1', srcPort: LOCAL_PORT, dstAddr: targetHost, dstPort: targetPort }
+    );
+    console.log(`[ssh] tunnel up: 127.0.0.1:${LOCAL_PORT} → ${targetHost}:${targetPort} via ${process.env.SSH_HOST}`);
+  } catch (err) {
+    // Non-fatal: /api/health will report the DB as unreachable and the
+    // pools retry, so the server still boots.
+    console.error('[ssh] tunnel failed:', err.message);
+  }
+}
+if (sshTunnelEnabled) startTunnel();
 
 // Read-only monitoring pool (used everywhere by default).
 export const monitorPool = new Pool({
