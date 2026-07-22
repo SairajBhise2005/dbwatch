@@ -18,11 +18,16 @@ const round = (n) => Math.round(n * 100) / 100;
 
 /**
  * @param {{t:string, v:number|null}[]} points
- * @param {{threshold?:number, minPoints?:number}} [opts]
+ * @param {{threshold?:number, minPoints?:number, minAbsDev?:number}} [opts]
  * @returns {{baseline:{median:number,mad:number}|null, anomalies:{t,v,score,direction}[]}}
+ *
+ * `minAbsDev` is an operational floor: a point must deviate from the median
+ * by at least this absolute amount to be flagged. It suppresses the noise
+ * from near-zero / flat metrics (e.g. read latency ~0 ms) where a tiny MAD
+ * makes trivial jitter score huge z-values.
  */
 export function detectAnomalies(points, opts = {}) {
-  const { threshold = 3.5, minPoints = 8 } = opts;
+  const { threshold = 3.5, minPoints = 8, minAbsDev = 0 } = opts;
   const vals = (points || []).map((p) => p.v).filter((v) => v != null);
   if (vals.length < minPoints) return { baseline: null, anomalies: [] };
 
@@ -34,6 +39,7 @@ export function detectAnomalies(points, opts = {}) {
   if (mad > 0) {
     for (const p of points) {
       if (p.v == null) continue;
+      if (Math.abs(p.v - med) < minAbsDev) continue; // operationally trivial
       const score = (MAD_TO_SIGMA * (p.v - med)) / mad;
       if (Math.abs(score) >= threshold) {
         anomalies.push({ t: p.t, v: p.v, score: round(score), direction: score > 0 ? 'high' : 'low' });
@@ -61,6 +67,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
   const tooFew = detectAnomalies([{ t: '1', v: 5 }, { t: '2', v: 900 }]);
   assert(tooFew.anomalies.length === 0, 'needs enough points before flagging');
+
+  // near-zero jitter: a 0.013 spike over a ~0.001 baseline scores high z,
+  // but a 0.02 absolute floor suppresses it (operationally trivial).
+  const latency = Array.from({ length: 20 }, (_, i) => ({ t: `${i}`, v: 0.001 + (i % 2) * 0.0002 }));
+  latency.push({ t: 'x', v: 0.013 });
+  assert(detectAnomalies(latency).anomalies.length === 1, 'flags the relative spike without a floor');
+  assert(detectAnomalies(latency, { minAbsDev: 0.02 }).anomalies.length === 0, 'floor suppresses trivial spike');
 
   console.log('anomaly.js self-check passed');
 }

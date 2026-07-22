@@ -116,12 +116,15 @@ router.get('/overview', async (_req, res, next) => {
         targetClass: smaller.instanceClass,
         monthlyDelta: smaller.deltaMonthly,
       };
-    } else if (((avgCpu != null && avgCpu > 85) || lowMem) && larger) {
+    } else if (((avgCpu != null && avgCpu > 85) || (lowMem && avgCpu != null && avgCpu > 60)) && larger) {
+      // Low freeable memory is only "pressure" under real load — on an idle
+      // instance it's just cache using RAM, so we don't upscale for it.
       recommendation = {
         action: 'upscale',
-        rationale: lowMem
-          ? 'Freeable memory is low — more RAM recommended.'
-          : `Average CPU ${avgCpu?.toFixed(1)}% — sustained high load.`,
+        rationale:
+          avgCpu != null && avgCpu > 85
+            ? `Average CPU ${avgCpu.toFixed(1)}% — sustained high load.`
+            : 'Freeable memory is low under load — more RAM recommended.',
         targetClass: larger.instanceClass,
         monthlyDelta: larger.deltaMonthly,
       };

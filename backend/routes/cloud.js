@@ -141,12 +141,18 @@ function buildRecommendations({ instance, series, latest, maxConnections }) {
     }
   }
 
-  // --- Memory pressure (heuristic) ---
-  if (latest.freeMemoryBytes !== null && latest.freeMemoryBytes < 200 * 1024 ** 2) {
+  // --- Memory pressure (only under load; low freeable memory on an idle
+  //     instance is just cache using RAM, not pressure) ---
+  if (
+    latest.freeMemoryBytes !== null &&
+    latest.freeMemoryBytes < 200 * 1024 ** 2 &&
+    avgCpu !== null &&
+    avgCpu > 60
+  ) {
     add(
       'Medium',
       'Memory pressure',
-      `Freeable memory is low (${(latest.freeMemoryBytes / 1024 ** 2).toFixed(0)} MB).`,
+      `Freeable memory is low (${(latest.freeMemoryBytes / 1024 ** 2).toFixed(0)} MB) under sustained load.`,
       'Consider a larger instance class or reducing work_mem / connection count.'
     );
   }

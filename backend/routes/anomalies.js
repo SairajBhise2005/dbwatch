@@ -9,6 +9,17 @@ import { detectAnomalies } from '../anomaly.js';
 
 const router = Router();
 
+// Operational noise floors per metric: a deviation smaller than this is
+// not worth flagging even if statistically unusual (a near-idle metric
+// jittering around zero). Keyed to aws.js METRIC keys.
+const FLOORS = {
+  readLatency: 0.02, // 20 ms
+  writeLatency: 0.02,
+  diskQueue: 1, // queue depth
+  readIops: 10,
+  writeIops: 10,
+};
+
 router.get('/', async (req, res, next) => {
   try {
     if (!awsConfigured()) {
@@ -24,7 +35,7 @@ router.get('/', async (req, res, next) => {
     const results = [];
     let totalAnomalies = 0;
     for (const [key, m] of Object.entries(series.metrics)) {
-      const { baseline, anomalies } = detectAnomalies(m.points);
+      const { baseline, anomalies } = detectAnomalies(m.points, { minAbsDev: FLOORS[key] || 0 });
       totalAnomalies += anomalies.length;
       results.push({ key, label: m.label, unit: m.unit, baseline, anomalies });
     }

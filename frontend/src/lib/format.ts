@@ -15,6 +15,7 @@ export function formatNumber(n: number): string {
 // Human-friendly duration from seconds (e.g. "2m 5s", "340ms").
 export function formatDuration(seconds: number | null): string {
   if (seconds === null || seconds === undefined) return '—';
+  if (seconds < 0) seconds = 0; // clock skew (now() - query_start) can go slightly negative
   if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const m = Math.floor(seconds / 60);
