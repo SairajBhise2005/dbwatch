@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { XCircle, RefreshCw, CheckCircle2, AlertTriangle, Users, Network, Activity, Lock as LockIcon } from 'lucide-react';
+import { XCircle, RefreshCw, CheckCircle2, AlertTriangle, Users, Network, Activity, Lock as LockIcon, Sparkles, Loader2 } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
 import { Card, Badge, StatCard, Skeleton, ErrorStrip } from '../components/ui';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { formatDuration, extractError } from '../lib/format';
-import type { Session, SessionsResponse, Diagnostics, DiagStatus, LocksResponse } from '../types';
+import type { Session, SessionsResponse, Diagnostics, DiagStatus, LocksResponse, AiDiagnoseResult } from '../types';
 
 export function Sessions() {
   const { data, error, loading, reload } = usePolling<SessionsResponse>(
@@ -14,6 +14,22 @@ export function Sessions() {
   );
   const { data: diag } = usePolling<Diagnostics>('/diagnostics', 15_000);
   const { data: locks } = usePolling<LocksResponse>('/locks', 10_000);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [advice, setAdvice] = useState<AiDiagnoseResult | null>(null);
+
+  async function getAdvice() {
+    if (!diag) return;
+    setAiBusy(true);
+    setAdvice(null);
+    try {
+      const { data } = await api.post<AiDiagnoseResult>('/ai/diagnose', { diagnostics: diag });
+      setAdvice(data);
+    } catch (e) {
+      setAdvice({ available: false, reason: extractError(e) });
+    } finally {
+      setAiBusy(false);
+    }
+  }
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [target, setTarget] = useState<Session | null>(null);
@@ -96,9 +112,19 @@ export function Sessions() {
             <Badge tone={diag.overall === 'ok' ? 'ok' : diag.overall === 'warn' ? 'warn' : 'danger'}>
               {diag.overall === 'ok' ? 'Healthy' : diag.overall === 'warn' ? 'Attention' : 'Critical'}
             </Badge>
-            <span className="ml-auto text-xs text-muted">
-              {diag.summary.ok} ok · {diag.summary.warn} warn · {diag.summary.fail} fail
-            </span>
+            <div className="ml-auto flex items-center gap-3">
+              <span className="text-xs text-muted">
+                {diag.summary.ok} ok · {diag.summary.warn} warn · {diag.summary.fail} fail
+              </span>
+              <button
+                onClick={getAdvice}
+                disabled={aiBusy}
+                className="flex items-center gap-1.5 rounded-lg border border-[color:var(--color-border)] px-2.5 py-1 text-xs hover:bg-[color:var(--color-surface-2)] disabled:opacity-50"
+              >
+                {aiBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-[color:var(--color-brand)]" />}
+                AI advice
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2 xl:grid-cols-3">
             {diag.checks.map((c) => (
@@ -111,6 +137,27 @@ export function Sessions() {
               </div>
             ))}
           </div>
+          {advice && (
+            <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
+              {!advice.available ? (
+                <p className="text-sm text-muted">
+                  AI unavailable{advice.reason ? `: ${advice.reason}` : ''}.
+                </p>
+              ) : advice.raw ? (
+                <pre className="whitespace-pre-wrap text-sm text-muted">{advice.raw}</pre>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  {advice.summary && <p className="text-muted">{advice.summary}</p>}
+                  {advice.actions?.map((a, i) => (
+                    <div key={i}>
+                      <span className="font-medium">→ {a.title}</span>
+                      <span className="text-muted"> — {a.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       )}
 

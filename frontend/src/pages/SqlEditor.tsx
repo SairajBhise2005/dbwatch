@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Play, ScanSearch, Gauge, Loader2, History, Trash2 } from 'lucide-react';
+import { Play, ScanSearch, Gauge, Loader2, History, Trash2, Sparkles } from 'lucide-react';
 import { api } from '../lib/api';
 import { Card, Badge, ErrorStrip } from '../components/ui';
 import { formatNumber, extractError } from '../lib/format';
-import type { SqlExecuteResult, SqlPlanResult } from '../types';
+import type { SqlExecuteResult, SqlPlanResult, AiOptimizeResult } from '../types';
 
 const HISTORY_KEY = 'dbwatch_sql_history';
 const MAX_HISTORY = 20;
@@ -17,6 +17,8 @@ export function SqlEditor() {
   const [result, setResult] = useState<SqlExecuteResult | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [ai, setAi] = useState<AiOptimizeResult | null>(null);
 
   useEffect(() => {
     try {
@@ -64,6 +66,22 @@ export function SqlEditor() {
     }
   }
 
+  async function optimize() {
+    const trimmed = sql.trim();
+    if (!trimmed) return;
+    setAiBusy(true);
+    setAi(null);
+    setError('');
+    try {
+      const { data } = await api.post<AiOptimizeResult>('/ai/optimize-query', { sql: trimmed });
+      setAi(data);
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_240px]">
       <div className="space-y-4">
@@ -98,6 +116,13 @@ export function SqlEditor() {
               icon={<Gauge size={15} />}
               label="EXPLAIN ANALYZE"
             />
+            <ActionButton
+              onClick={optimize}
+              busy={aiBusy}
+              disabled={busy !== null || aiBusy}
+              icon={<Sparkles size={15} />}
+              label="Optimize (AI)"
+            />
             <span className="ml-auto text-xs text-muted">
               SELECTs auto-limited to 500 rows · 15s timeout
             </span>
@@ -105,6 +130,53 @@ export function SqlEditor() {
         </Card>
 
         {error && <ErrorStrip message={error} />}
+
+        {ai && (
+          <Card className="p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Sparkles size={16} className="text-[color:var(--color-brand)]" />
+              <h3 className="text-sm font-semibold">AI optimization</h3>
+            </div>
+            {!ai.available ? (
+              <p className="text-sm text-muted">
+                AI unavailable{ai.reason ? `: ${ai.reason}` : ''}.
+              </p>
+            ) : ai.raw ? (
+              <pre className="overflow-x-auto whitespace-pre-wrap text-sm text-muted">{ai.raw}</pre>
+            ) : (
+              <div className="space-y-3 text-sm">
+                {ai.summary && <p className="text-muted">{ai.summary}</p>}
+                {ai.optimizedSql && (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-medium">Suggested rewrite</span>
+                      <button
+                        onClick={() => setSql(ai.optimizedSql as string)}
+                        className="text-xs text-[color:var(--color-brand)] hover:underline"
+                      >
+                        Use it
+                      </button>
+                    </div>
+                    <pre className="overflow-x-auto rounded-lg bg-[color:var(--color-bg)] p-3 font-mono text-xs">{ai.optimizedSql}</pre>
+                  </div>
+                )}
+                {ai.indexes && ai.indexes.length > 0 && (
+                  <div>
+                    <div className="mb-1 font-medium">Suggested indexes</div>
+                    {ai.indexes.map((ix, i) => (
+                      <pre key={i} className="mb-1 overflow-x-auto rounded-lg bg-[color:var(--color-bg)] p-2 font-mono text-xs">{ix}</pre>
+                    ))}
+                  </div>
+                )}
+                {ai.notes && ai.notes.length > 0 && (
+                  <ul className="list-inside list-disc space-y-1 text-muted">
+                    {ai.notes.map((n, i) => <li key={i}>{n}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+          </Card>
+        )}
 
         {plan !== null && (
           <Card className="p-4">

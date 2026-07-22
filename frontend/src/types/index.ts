@@ -213,6 +213,25 @@ export interface CloudMetricsResponse {
   metrics?: Record<string, MetricSeries>;
 }
 
+export interface AiOptimizeResult {
+  available: boolean;
+  reason?: string;
+  raw?: string;
+  plan?: string;
+  summary?: string;
+  optimizedSql?: string | null;
+  indexes?: string[];
+  notes?: string[];
+}
+
+export interface AiDiagnoseResult {
+  available: boolean;
+  reason?: string;
+  raw?: string;
+  summary?: string;
+  actions?: { title: string; detail: string }[];
+}
+
 export interface Activity {
   pid: number;
   username: string | null;
