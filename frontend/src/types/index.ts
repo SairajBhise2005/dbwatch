@@ -378,6 +378,9 @@ export interface QueryStat {
 export interface QueryPerformanceResponse {
   available: boolean;
   message?: string;
+  windowed?: boolean;
+  windowMinutes?: number;
+  collecting?: boolean;
   statements: QueryStat[];
 }
 

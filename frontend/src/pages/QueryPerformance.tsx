@@ -9,9 +9,19 @@ import type { QueryPerformanceResponse, QueryStat } from '../types';
 
 type SortKey = 'totalTime' | 'meanTime' | 'calls';
 
+const WINDOWS = [
+  { label: 'Since reset', minutes: 0 },
+  { label: '15m', minutes: 15 },
+  { label: '1h', minutes: 60 },
+  { label: '6h', minutes: 360 },
+];
+
 export function QueryPerformance() {
-  const { data, error, loading, reload } =
-    usePolling<QueryPerformanceResponse>('/query-performance', 15_000);
+  const [minutes, setMinutes] = useState(0);
+  const { data, error, loading, reload } = usePolling<QueryPerformanceResponse>(
+    `/query-performance${minutes ? `?minutes=${minutes}` : ''}`,
+    15_000
+  );
   const [sortKey, setSortKey] = useState<SortKey>('totalTime');
   const [search, setSearch] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -56,6 +66,28 @@ export function QueryPerformance() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm text-muted">Window</label>
+        <div className="flex gap-1">
+          {WINDOWS.map((w) => (
+            <button
+              key={w.minutes}
+              onClick={() => setMinutes(w.minutes)}
+              className={`rounded-md px-3 py-1 text-xs ${
+                minutes === w.minutes
+                  ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)]'
+                  : 'border border-[color:var(--color-border)] text-muted hover:bg-[color:var(--color-surface-2)]'
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
+        {data?.windowed && (
+          <Badge tone="info">last ~{data.windowMinutes}m</Badge>
+        )}
+        {data?.collecting && (
+          <span className="text-xs text-[color:var(--color-warn)]">collecting history…</span>
+        )}
         <label className="text-sm text-muted">Sort by</label>
         <select
           value={sortKey}

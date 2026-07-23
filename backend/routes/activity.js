@@ -9,7 +9,10 @@ import { monitorPool } from '../db.js';
 
 const router = Router();
 
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req, res, next) => {
+  // Optional time-range filter: only sessions whose last state change was
+  // within the last N minutes. 0 / absent = no window (all).
+  const minutes = Math.max(0, Math.min(Number(req.query.minutes) || 0, 1440));
   try {
     const { rows } = await monitorPool.query(
       `SELECT pid,
@@ -25,8 +28,10 @@ router.get('/', async (_req, res, next) => {
         WHERE pid <> pg_backend_pid()
           AND query IS NOT NULL
           AND query <> ''
+          AND ($1::int = 0 OR state_change > now() - ($1 * interval '1 minute'))
         ORDER BY state_change DESC NULLS LAST
-        LIMIT 50`
+        LIMIT 50`,
+      [minutes]
     );
 
     const activity = rows.map((r) => ({
@@ -42,7 +47,7 @@ router.get('/', async (_req, res, next) => {
       query: (r.query || '').trim(),
     }));
 
-    res.json({ activity, count: activity.length });
+    res.json({ activity, count: activity.length, minutes });
   } catch (err) {
     next(err);
   }

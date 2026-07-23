@@ -1,14 +1,23 @@
+import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { Card, Badge, Skeleton, ErrorStrip } from '../components/ui';
 import { formatAgo, formatDuration } from '../lib/format';
 import type { ActivityResponse, Activity as ActivityRow } from '../types';
 
+const WINDOWS = [
+  { label: 'All', minutes: 0 },
+  { label: '5m', minutes: 5 },
+  { label: '15m', minutes: 15 },
+  { label: '1h', minutes: 60 },
+];
+
 // Recent Query Activity — the practical alternative to live log-file
 // reading, built from pg_stat_activity ordered by state_change.
 export function Activity() {
+  const [minutes, setMinutes] = useState(0);
   const { data, error, loading, reload } = usePolling<ActivityResponse>(
-    '/activity',
+    `/activity${minutes ? `?minutes=${minutes}` : ''}`,
     5_000
   );
 
@@ -19,9 +28,22 @@ export function Activity() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <p className="text-sm text-muted">
-          Most recent session activity (refreshes every 5s)
-        </p>
+        <span className="text-sm text-muted">Last change within</span>
+        <div className="flex gap-1">
+          {WINDOWS.map((w) => (
+            <button
+              key={w.minutes}
+              onClick={() => setMinutes(w.minutes)}
+              className={`rounded-md px-3 py-1 text-xs ${
+                minutes === w.minutes
+                  ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)]'
+                  : 'border border-[color:var(--color-border)] text-muted hover:bg-[color:var(--color-surface-2)]'
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
         <span className="text-sm text-muted">· {rows.length} entries</span>
         <button
           onClick={reload}
