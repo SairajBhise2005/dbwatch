@@ -25,3 +25,7 @@ npm-debug.log*
 
 # Benchmark data (NAB — AGPL; fetched via fetch_data.sh, not vendored)
 ml/anomaly-benchmark/data/
+
+# Python
+__pycache__/
+*.pyc

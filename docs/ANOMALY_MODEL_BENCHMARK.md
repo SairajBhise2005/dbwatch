@@ -81,6 +81,18 @@ Representative single series (`rds_cpu_utilization_cc0c53`, 10% anomalous):
 4. **Defer the Autoencoder** until there's substantial history and a need for
    complex temporal patterns — accuracy doesn't justify the cost here yet.
 
+## What shipped
+
+Recommendations 1 + 2 are now live. Isolation Forest is the **primary**
+detector, running as a Python sidecar ([`anomaly-service/`](../anomaly-service/));
+`GET /api/anomalies` calls it multivariately (all CloudWatch metrics at once)
+and returns each flagged timestamp with the metrics that drove it. If the
+sidecar is unreachable, the backend **falls back** to the built-in modified
+z-score ([`backend/anomaly.js`](../backend/anomaly.js)), grouping per-metric
+flags by timestamp into the same shape — so the dashboard always works. The
+Cloud page badges which engine produced the result (`Isolation Forest (ML)`
+vs `z-score fallback`).
+
 ## Caveats
 
 - Unsupervised models were given the true anomaly fraction (`contamination`);

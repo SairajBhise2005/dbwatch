@@ -17,11 +17,22 @@ services:
       - ./backend/.env
     environment:
       CORS_ORIGIN: http://localhost
+      # Isolation Forest sidecar (primary anomaly detector). If this is
+      # down the backend falls back to its built-in z-score detector.
+      ANOMALY_SERVICE_URL: http://anomaly-service:8000
     volumes:
       # Persist backups on the host so they survive container restarts.
       - ./backups:/app/backups
     expose:
       - '3001'
+
+  # ML anomaly detection (multivariate Isolation Forest). Stateless,
+  # not published — only the backend talks to it over the compose network.
+  anomaly-service:
+    build: ./anomaly-service
+    restart: unless-stopped
+    expose:
+      - '8000'
 
   frontend:
     build: ./frontend

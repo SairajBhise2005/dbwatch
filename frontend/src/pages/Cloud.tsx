@@ -156,6 +156,9 @@ export function Cloud() {
             <Badge tone={anom.totalAnomalies ? 'warn' : 'ok'}>
               {anom.totalAnomalies ?? 0} found
             </Badge>
+            <Badge tone={anom.engine === 'isolation-forest' ? 'info' : 'neutral'}>
+              {anom.engine === 'isolation-forest' ? 'Isolation Forest (ML)' : 'z-score fallback'}
+            </Badge>
             <span className="ml-auto text-xs text-muted">{anom.method}</span>
           </div>
           {!anom.totalAnomalies ? (
@@ -164,16 +167,22 @@ export function Cloud() {
             </p>
           ) : (
             <div className="mt-2 space-y-2">
-              {anom.results?.filter((r) => r.anomalies.length > 0).map((r) => (
-                <div key={r.key} className="text-sm">
-                  <span className="font-medium">{r.label}</span>
-                  <span className="text-muted"> — {r.anomalies.length} point(s): </span>
-                  {r.anomalies.slice(0, 4).map((a, i) => (
-                    <span key={i} className="mr-2 font-mono text-xs text-muted">
-                      {hhmm(a.t)} {a.direction === 'high' ? '↑' : '↓'}
-                      {a.v.toFixed(1)} (z{a.score})
-                    </span>
-                  ))}
+              {anom.anomalies?.slice(0, 8).map((a, i) => (
+                <div key={i} className="text-sm">
+                  <span className="font-mono text-xs text-muted">{hhmm(a.t)}</span>
+                  <span className="ml-2 text-muted">score {a.score}</span>
+                  <span className="text-muted"> — </span>
+                  {a.contributors.length ? (
+                    a.contributors.map((c, j) => (
+                      <span key={j} className="mr-2 font-mono text-xs">
+                        {c.label} {c.z > 0 ? '↑' : '↓'}
+                        {Math.abs(c.value) >= 1000 ? Math.round(c.value).toLocaleString() : c.value.toFixed(1)}
+                        <span className="text-muted"> (z{c.z})</span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted">multivariate pattern</span>
+                  )}
                 </div>
               ))}
             </div>

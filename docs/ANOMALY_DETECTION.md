@@ -4,6 +4,12 @@ Deliverable for the feedback item *"Research the top 3 AI/ML models for database
 anomaly detection; compare on accuracy, performance, resource use, ease of
 implementation; implement and test."*
 
+> **Update:** the three models were benchmarked on labeled data — see
+> [`ANOMALY_MODEL_BENCHMARK.md`](ANOMALY_MODEL_BENCHMARK.md). **Isolation Forest
+> won for our workload and is now the primary detector** (Python sidecar,
+> [`anomaly-service/`](../anomaly-service/)), with the modified z-score below as
+> the graceful fallback.
+
 DBWatch monitors an RDS instance whose signal is a set of **numeric metric
 time-series** (CloudWatch: CPU, connections, freeable memory, free storage,
 IOPS, latency; plus `pg_stat` counters). The data is low-volume, ~1 point/minute,

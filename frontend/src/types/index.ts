@@ -213,28 +213,28 @@ export interface CloudMetricsResponse {
   metrics?: Record<string, MetricSeries>;
 }
 
-export interface AnomalyPoint {
-  t: string;
-  v: number;
-  score: number;
-  direction: 'high' | 'low';
-}
-
-export interface AnomalyMetric {
+export interface AnomalyContributor {
   key: string;
   label: string;
-  unit: string;
-  baseline: { median: number; mad: number } | null;
-  anomalies: AnomalyPoint[];
+  value: number;
+  z: number;
+}
+
+export interface AnomalyEvent {
+  t: string;
+  score: number;
+  contributors: AnomalyContributor[];
 }
 
 export interface AnomaliesResponse {
   available: boolean;
   reason?: string;
   minutes?: number;
+  engine?: 'isolation-forest' | 'zscore';
   method?: string;
+  degraded?: boolean;
   totalAnomalies?: number;
-  results?: AnomalyMetric[];
+  anomalies?: AnomalyEvent[];
 }
 
 export interface AiOptimizeResult {
