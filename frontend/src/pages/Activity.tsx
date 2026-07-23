@@ -2,23 +2,26 @@ import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { Card, Badge, Skeleton, ErrorStrip } from '../components/ui';
+import { TimeRangePicker } from '../components/TimeRangePicker';
 import { formatAgo, formatDuration } from '../lib/format';
 import type { ActivityResponse, Activity as ActivityRow } from '../types';
 
-const WINDOWS = [
-  { label: 'All', minutes: 0 },
-  { label: '5m', minutes: 5 },
-  { label: '15m', minutes: 15 },
-  { label: '1h', minutes: 60 },
+const PRESETS = [
+  { label: 'Last 5 minutes', minutes: 5 },
+  { label: 'Last 15 minutes', minutes: 15 },
+  { label: 'Last 30 minutes', minutes: 30 },
+  { label: 'Last 1 hour', minutes: 60 },
+  { label: 'All time', minutes: 0 },
 ];
 
 // Recent Query Activity — the practical alternative to live log-file
 // reading, built from pg_stat_activity ordered by state_change.
 export function Activity() {
   const [minutes, setMinutes] = useState(0);
+  const [refreshMs, setRefreshMs] = useState(5_000);
   const { data, error, loading, reload } = usePolling<ActivityResponse>(
     `/activity${minutes ? `?minutes=${minutes}` : ''}`,
-    5_000
+    refreshMs
   );
 
   if (error && !data) return <ErrorStrip message={error} />;
@@ -29,22 +32,15 @@ export function Activity() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted">Last change within</span>
-        <div className="flex gap-1">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.minutes}
-              onClick={() => setMinutes(w.minutes)}
-              className={`rounded-md px-3 py-1 text-xs ${
-                minutes === w.minutes
-                  ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)]'
-                  : 'border border-[color:var(--color-border)] text-muted hover:bg-[color:var(--color-surface-2)]'
-              }`}
-            >
-              {w.label}
-            </button>
-          ))}
-        </div>
-        <span className="text-sm text-muted">· {rows.length} entries</span>
+        <TimeRangePicker
+          value={minutes}
+          onChange={setMinutes}
+          presets={PRESETS}
+          zeroLabel="All time"
+          refreshMs={refreshMs}
+          onRefreshChange={setRefreshMs}
+        />
+        <span className="text-sm text-muted">{rows.length} entries</span>
         <button
           onClick={reload}
           className="ml-auto flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-surface-2)]"

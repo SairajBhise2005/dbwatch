@@ -12,6 +12,7 @@ import {
 import { Cloud as CloudIcon, Info, Lightbulb, Server, AlertTriangle } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { Card, Badge, StatCard, Skeleton, ErrorStrip } from '../components/ui';
+import { TimeRangePicker } from '../components/TimeRangePicker';
 import { formatBytes } from '../lib/format';
 import type {
   CloudOverview,
@@ -21,11 +22,13 @@ import type {
   AnomaliesResponse,
 } from '../types';
 
-const RANGES = [
-  { label: '1h', minutes: 60 },
-  { label: '3h', minutes: 180 },
-  { label: '12h', minutes: 720 },
-  { label: '24h', minutes: 1440 },
+const PRESETS = [
+  { label: 'Last 15 minutes', minutes: 15 },
+  { label: 'Last 30 minutes', minutes: 30 },
+  { label: 'Last 1 hour', minutes: 60 },
+  { label: 'Last 3 hours', minutes: 180 },
+  { label: 'Last 12 hours', minutes: 720 },
+  { label: 'Last 24 hours', minutes: 1440 },
 ];
 
 const sevTone = { High: 'danger', Medium: 'warn', Low: 'neutral' } as const;
@@ -44,13 +47,14 @@ export function Cloud() {
     30_000
   );
   const [minutes, setMinutes] = useState(180);
+  const [refreshMs, setRefreshMs] = useState(60_000);
   const { data: mx } = usePolling<CloudMetricsResponse>(
     `/cloud/metrics?minutes=${minutes}`,
-    60_000
+    refreshMs
   );
   const { data: anom } = usePolling<AnomaliesResponse>(
     `/anomalies?minutes=${minutes}`,
-    60_000
+    refreshMs
   );
 
   if (error && !ov) return <ErrorStrip message={error} />;
@@ -181,20 +185,15 @@ export function Cloud() {
       <div className="flex items-center gap-2">
         <CloudIcon size={16} className="text-[color:var(--color-brand)]" />
         <h2 className="text-sm font-semibold">CloudWatch metrics</h2>
-        <div className="ml-auto flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.minutes}
-              onClick={() => setMinutes(r.minutes)}
-              className={`rounded-md px-3 py-1 text-xs ${
-                minutes === r.minutes
-                  ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)]'
-                  : 'border border-[color:var(--color-border)] text-muted hover:bg-[color:var(--color-surface-2)]'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="ml-auto">
+          <TimeRangePicker
+            value={minutes}
+            onChange={setMinutes}
+            presets={PRESETS}
+            refreshMs={refreshMs}
+            onRefreshChange={setRefreshMs}
+            align="right"
+          />
         </div>
       </div>
 

@@ -4,23 +4,26 @@ import { usePolling } from '../hooks/usePolling';
 import { api } from '../lib/api';
 import { Card, Badge, Skeleton, ErrorStrip } from '../components/ui';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { TimeRangePicker } from '../components/TimeRangePicker';
 import { formatNumber, extractError } from '../lib/format';
 import type { QueryPerformanceResponse, QueryStat } from '../types';
 
 type SortKey = 'totalTime' | 'meanTime' | 'calls';
 
-const WINDOWS = [
+const PRESETS = [
   { label: 'Since reset', minutes: 0 },
-  { label: '15m', minutes: 15 },
-  { label: '1h', minutes: 60 },
-  { label: '6h', minutes: 360 },
+  { label: 'Last 15 minutes', minutes: 15 },
+  { label: 'Last 30 minutes', minutes: 30 },
+  { label: 'Last 1 hour', minutes: 60 },
+  { label: 'Last 6 hours', minutes: 360 },
 ];
 
 export function QueryPerformance() {
   const [minutes, setMinutes] = useState(0);
+  const [refreshMs, setRefreshMs] = useState(15_000);
   const { data, error, loading, reload } = usePolling<QueryPerformanceResponse>(
     `/query-performance${minutes ? `?minutes=${minutes}` : ''}`,
-    15_000
+    refreshMs
   );
   const [sortKey, setSortKey] = useState<SortKey>('totalTime');
   const [search, setSearch] = useState('');
@@ -67,21 +70,14 @@ export function QueryPerformance() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm text-muted">Window</label>
-        <div className="flex gap-1">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.minutes}
-              onClick={() => setMinutes(w.minutes)}
-              className={`rounded-md px-3 py-1 text-xs ${
-                minutes === w.minutes
-                  ? 'bg-[color:var(--color-brand)] text-[color:var(--color-on-brand)]'
-                  : 'border border-[color:var(--color-border)] text-muted hover:bg-[color:var(--color-surface-2)]'
-              }`}
-            >
-              {w.label}
-            </button>
-          ))}
-        </div>
+        <TimeRangePicker
+          value={minutes}
+          onChange={setMinutes}
+          presets={PRESETS}
+          zeroLabel="Since reset"
+          refreshMs={refreshMs}
+          onRefreshChange={setRefreshMs}
+        />
         {data?.windowed && (
           <Badge tone="info">last ~{data.windowMinutes}m</Badge>
         )}

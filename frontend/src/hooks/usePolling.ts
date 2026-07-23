@@ -37,10 +37,12 @@ export function usePolling<T>(path: string, intervalMs = 10_000): PollState<T> {
     }
 
     poll();
-    const id = setInterval(poll, intervalMs);
+    // intervalMs <= 0 → fetch once, no auto-refresh (paused). `reload()`
+    // and path changes still refetch.
+    const id = intervalMs > 0 ? setInterval(poll, intervalMs) : null;
     return () => {
       active = false;
-      clearInterval(id);
+      if (id) clearInterval(id);
     };
   }, [path, intervalMs, tick]);
 
